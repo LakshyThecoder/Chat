@@ -8,6 +8,14 @@ import {
   getCorrelationIdFromHeaders,
 } from "@/src/infrastructure/observability/correlation";
 
+function isAlwaysAllowedPath(pathname: string): boolean {
+  if (pathname === "/") return true;
+  if (pathname === "/favicon.ico") return true;
+  if (pathname.startsWith("/api/")) return true;
+  if (pathname.startsWith("/_next/")) return true;
+  return false;
+}
+
 export async function middleware(request: NextRequest) {
   const correlationId =
     getCorrelationIdFromHeaders(request.headers) ?? generateCorrelationId();
@@ -19,6 +27,18 @@ export async function middleware(request: NextRequest) {
     request: { headers: requestHeaders },
   });
   response.headers.set(CORRELATION_ID_HEADER, correlationId);
+
+  // Hackathon demo lock: keep the judge on a single, reliable surface.
+  // In development we allow navigating the full Bureau; in production, non-demo pages redirect to `/`.
+  if (process.env.NODE_ENV === "production") {
+    const pathname = request.nextUrl.pathname;
+    if (!isAlwaysAllowedPath(pathname)) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/";
+      url.search = "";
+      return NextResponse.redirect(url, { status: 307, headers: { [CORRELATION_ID_HEADER]: correlationId } });
+    }
+  }
 
   const env = parsePublicEnv();
   if (!env.NEXT_PUBLIC_SUPABASE_URL || !env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {

@@ -73,34 +73,7 @@ export function FlyRightWebMcp() {
       },
       execute: (input) => callFlyRight("get_claim_status", input),
     });
-    context.registerTool({
-      name: "submit_claim",
-      description: "File a FlyRight unused-fare claim. Idempotent. Fails if ineligible or already claimed.",
-      inputSchema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["locator", "lastName", "amount", "idempotencyKey"],
-        properties: {
-          locator: { type: "string" },
-          lastName: { type: "string" },
-          amount: { type: "string" },
-          currency: { type: "string" },
-          idempotencyKey: { type: "string" },
-        },
-      },
-      execute: (input) => callFlyRight("submit_claim", input),
-    });
-    context.registerTool({
-      name: "request_follow_up",
-      description: "Ask FlyRight to resume review of a claim that needs information.",
-      inputSchema: {
-        type: "object",
-        additionalProperties: false,
-        required: ["claimId"],
-        properties: { claimId: { type: "string" } },
-      },
-      execute: (input) => callFlyRight("request_follow_up", input),
-    });
+    // High-impact filing is not on this counter. Aegis holds the signature.
 
     setReady(true);
   }, []);

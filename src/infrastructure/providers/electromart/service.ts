@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomBytes } from "crypto";
 import { createAdminSupabaseClient } from "@/src/infrastructure/db/supabase/admin";
 import { evaluateWarrantyClaim, warrantyEndsAt } from "@/src/domain/eligibility/evaluate-warranty-claim";
 import { normalizeSqlMoney } from "@/src/domain/money/cents";
@@ -47,6 +48,11 @@ function mapClaim(row: Record<string, unknown>): ElectroMartClaim {
     createdAt: String(row.created_at),
   };
 }
+
+const THEATER_TEMPLATE = {
+  orderId: "EM-4412",
+  lastName: "MOREAU",
+} as const;
 
 export class ElectroMartProvider {
   constructor(private readonly client = createAdminSupabaseClient()) {}
@@ -247,6 +253,40 @@ export class ElectroMartProvider {
       throw new ElectroMartNotFoundError();
     }
     return mapClaim(data);
+  }
+
+  async issueTheaterOrder(): Promise<ElectroMartOrder> {
+    const template = await this.getOrder(THEATER_TEMPLATE.orderId, THEATER_TEMPLATE.lastName);
+    const purchasedAt = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const suffix = randomBytes(3).toString("hex").toUpperCase();
+      const orderId = `EM-${suffix}`;
+      const { data, error } = await this.client
+        .from("electromart_orders")
+        .insert({
+          order_id: orderId,
+          last_name: template.lastName,
+          product_name: template.productName,
+          purchased_at: purchasedAt,
+          warranty_months: template.warrantyMonths,
+          purchase_price: template.purchasePrice,
+          currency: template.currency,
+          return_opened: false,
+        })
+        .select("*")
+        .single();
+
+      if (!error && data) {
+        return mapOrder(data);
+      }
+      if (error?.code === "23505") {
+        continue;
+      }
+      throw new Error(error?.message ?? "ElectroMart could not issue a theater order.");
+    }
+
+    throw new Error("ElectroMart could not issue a unique theater order.");
   }
 }
 

@@ -1,0 +1,1495 @@
+
+Use these type of componenets 
+You are given a task to integrate a React component into your codebase.
+Please verify your project has the following setup:
+- shadcn/ui project structure
+- Tailwind CSS v4.0
+- TypeScript
+
+If any of these are missing, provide instructions on how to setup project via shadcn CLI, install Tailwind or Typescript.
+
+Determine the default path for components and styles. 
+If default path for components is not /components/ui, provide instructions on why it's important to create this folder
+Copy-paste this component to /components/ui folder:
+File location: components/cloud-shader-plane-window-demo.tsx
+
+File content: "use client";
+
+import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
+import { motion } from "motion/react";
+
+import { CloudShader } from "@/components/ui/cloud-shader";
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return isMobile;
+}
+
+export default function CloudShaderPlaneWindowDemo() {
+  const isMobile = useIsMobile();
+
+  return (
+    <div className="relative h-dvh w-full overflow-hidden bg-linear-to-r from-neutral-900 via-neutral-700 to-neutral-900 px-2 pt-6 md:px-8 md:pt-10">
+      {/* plane window: black shell → dark bezel → light bezel → the view.
+          full width, rounded at the top, the bottom runs past the viewport */}
+      <div className="h-[105dvh] w-full rounded-t-[56px] bg-neutral-950 p-0.5 shadow-[0_40px_100px_-20px_rgba(0,0,0,0.9),0_12px_32px_rgba(0,0,0,0.6)] md:rounded-t-[200px]">
+        <div className="relative h-full overflow-hidden rounded-t-[54px] bg-neutral-900 p-4 shadow-[inset_0_2px_4px_rgba(255,255,255,0.12),inset_0_-8px_20px_rgba(0,0,0,0.55)] md:rounded-t-[198px] md:p-8">
+          {/* four dotted walls, one per edge, each rotated into the page.
+                the mitred triangle clip sits on an untransformed wrapper, so
+                the seams meet exactly in screen space — no gaps, no overlap.
+                the rotated planes inside are oversized to keep the triangles
+                covered after the perspective shrink */}
+          <div aria-hidden className="absolute inset-0">
+            <div className="absolute inset-0 [clip-path:polygon(0_0,100%_0,50%_50%)] [perspective:2000px]">
+              <div className="absolute -inset-x-1/4 inset-y-0 origin-top [transform:rotateX(-40deg)] bg-[radial-gradient(circle,rgba(255,255,255,0.2)_1px,transparent_1px)] bg-[size:16px_16px]" />
+            </div>
+            <div className="absolute inset-0 [clip-path:polygon(0_100%,100%_100%,50%_50%)] [perspective:2000px]">
+              <div className="absolute -inset-x-1/4 inset-y-0 origin-bottom [transform:rotateX(40deg)] bg-[radial-gradient(circle,rgba(255,255,255,0.2)_1px,transparent_1px)] bg-[size:16px_16px]" />
+            </div>
+            <div className="absolute inset-0 [clip-path:polygon(0_0,0_100%,50%_50%)] [perspective:2000px]">
+              <div className="absolute inset-x-0 -inset-y-1/4 origin-left [transform:rotateY(40deg)] bg-[radial-gradient(circle,rgba(255,255,255,0.2)_1px,transparent_1px)] bg-[size:16px_16px]" />
+            </div>
+            <div className="absolute inset-0 [clip-path:polygon(100%_0,100%_100%,50%_50%)] [perspective:2000px]">
+              <div className="absolute inset-x-0 -inset-y-1/4 origin-right [transform:rotateY(-40deg)] bg-[radial-gradient(circle,rgba(255,255,255,0.2)_1px,transparent_1px)] bg-[size:16px_16px]" />
+            </div>
+          </div>
+          <div className="relative h-full overflow-hidden rounded-t-[38px] bg-linear-to-t from-[#8cbfe8] to-[#3876ba] md:rounded-t-[166px]">
+            {/* clouds drift left to right; fewer clouds on phones to keep the
+                fragment shader cheap. the sky fades in softly on mount */}
+            <motion.div
+              className="absolute inset-0"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 1.4, ease: "easeOut" }}
+            >
+              {/* the shader renders at half size and upscales 2x — the clouds
+                  are soft so nothing visible is lost, and the GPU does a
+                  quarter of the fragment work, which keeps the drift smooth */}
+              <div className="absolute h-1/2 w-1/2 origin-top-left scale-200">
+                <CloudShader
+                  speed={1}
+                  count={isMobile ? 3 : 6}
+                  className="absolute inset-0"
+                />
+              </div>
+            </motion.div>
+
+            {/* the window glass — liquid glass over the view, so the rim
+                  refraction follows the window corners. content sits above.
+                  aberration/frost stay 0 — extra filter passes over an
+                  animated backdrop are too expensive. skipped entirely on
+                  phones: a full-screen SVG backdrop filter over an animated
+                  canvas is too heavy for mobile GPUs */}
+            {!isMobile && (
+              <LiquidGlassLayer
+                className="absolute inset-0 z-[15]"
+                radius={166}
+                bevelDepth={44}
+                aberration={0}
+                frost={0}
+              />
+            )}
+
+            {/* navbar */}
+            <nav className="relative z-30 mx-auto flex w-full max-w-7xl items-center justify-between px-6 pt-8 md:px-20 md:pt-12">
+              <div className="flex items-center gap-8">
+                <span className="text-lg font-semibold tracking-tight text-white">
+                  Skyline
+                </span>
+                <div className="hidden items-center gap-6 text-sm font-medium text-white/90 md:flex">
+                  <a href="#" className="transition hover:text-white">
+                    Flights
+                  </a>
+                  <a href="#" className="transition hover:text-white">
+                    Hotels
+                  </a>
+                  <a href="#" className="transition hover:text-white">
+                    Deals
+                  </a>
+                  <a href="#" className="transition hover:text-white">
+                    Support
+                  </a>
+                </div>
+              </div>
+              <a
+                href="#"
+                className="rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-black transition hover:bg-white/90"
+              >
+                Sign in
+              </a>
+            </nav>
+
+            {/* hero content, left aligned with the navbar */}
+            <div className="relative z-20 mx-auto mt-12 w-full max-w-7xl px-6 md:mt-28 md:px-20">
+              <div className="max-w-2xl">
+                <h1 className="text-3xl font-bold tracking-tight text-white [text-shadow:0_2px_12px_rgba(15,42,67,0.35)] md:text-6xl">
+                  Your window seat to anywhere on Earth
+                </h1>
+                <p className="mt-4 max-w-md text-base text-balance text-white/85 md:text-lg">
+                  Search 400+ airlines, watch fares drop in real time, and book
+                  in under a minute. No hidden fees, no fine print, just you and
+                  the clouds.
+                </p>
+                <div className="mt-8 flex flex-wrap items-center gap-4">
+                  <a
+                    href="#"
+                    className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
+                  >
+                    Book a flight
+                  </a>
+                  <a
+                    href="#"
+                    className="rounded-full px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                  >
+                    Explore destinations
+                  </a>
+                </div>
+
+                {/* social proof */}
+                <div className="mt-8 flex items-center gap-3">
+                  <div className="flex -space-x-2.5">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <img
+                        key={i}
+                        src={`https://assets.aceternity.com/avatars/${i}.webp`}
+                        alt={`Traveller ${i}`}
+                        width={32}
+                        height={32}
+                        className="h-8 w-8 rounded-full border-2 border-white/80 object-cover"
+                      />
+                    ))}
+                  </div>
+                  <p className="text-sm text-white/85">
+                    <span className="font-semibold text-white">Manu</span> and 5
+                    others saved 30% on their last trip
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* window-seat wing view with a gentle in-flight bob */}
+            <motion.div
+              className="pointer-events-none absolute -bottom-6 left-0 z-10 w-[85%] md:w-[70%]"
+              animate={{ y: [0, -12, 0] }}
+              transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <img
+                src="https://assets.aceternity.com/components/plane-wing.png"
+                alt="Airplane wing above the clouds"
+                className="h-auto w-full object-cover"
+              />
+            </motion.div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Liquid glass — optical refraction                                   */
+/* (Snell's law displacement map → feDisplacementMap).                 */
+/* ------------------------------------------------------------------ */
+
+type LiquidGlassLayerProps = {
+  className?: string;
+  /** Corner radius in px. */
+  radius?: number;
+  /** Rim band that bends light, in px. */
+  bevelDepth?: number;
+  /** Displacement strength in px. */
+  scale?: number;
+  /** Chromatic aberration spread in px. */
+  aberration?: number;
+  /** Extra blur after refraction, in px. */
+  frost?: number;
+  /** White body tint 0–1. */
+  tint?: number;
+};
+
+function supportsUrlBackdropFilter(): boolean {
+  if (typeof CSS === "undefined" || !CSS.supports) return false;
+  return (
+    CSS.supports("backdrop-filter", "url(#x)") ||
+    CSS.supports("-webkit-backdrop-filter", "url(#x)")
+  );
+}
+
+function prefersReducedTransparency(): boolean {
+  if (typeof window === "undefined" || !window.matchMedia) return false;
+  return window.matchMedia("(prefers-reduced-transparency: reduce)").matches;
+}
+
+function isSafariLike(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return /Safari/.test(ua) && !/Chrome|Chromium|Edg|OPR/.test(ua);
+}
+
+/** Signed distance to a rounded box centred at the origin. <0 inside. */
+function sdRoundedBox(
+  px: number,
+  py: number,
+  halfW: number,
+  halfH: number,
+  r: number,
+): number {
+  const qx = Math.abs(px) - halfW + r;
+  const qy = Math.abs(py) - halfH + r;
+  const outside = Math.hypot(Math.max(qx, 0), Math.max(qy, 0));
+  const inside = Math.min(Math.max(qx, qy), 0);
+  return inside + outside - r;
+}
+
+/**
+ * Squircle-dome slope → Snell's-law bend.
+ * `x` is depth in from the rim (0 = edge, 1 = flat centre).
+ */
+function bendFromDepth(x: number): number {
+  const t = Math.min(1, Math.max(0, x));
+  const u = 1 - t;
+  const denom = (1 - u ** 4) ** 0.75;
+  if (denom < 1e-6) return 0;
+  const slope = Math.min(u ** 3 / denom, 8);
+  const thetaI = Math.atan(slope);
+  const sinT = Math.sin(thetaI) / 1.5;
+  if (sinT >= 1) return Math.sin(thetaI);
+  return Math.sin(thetaI - Math.asin(sinT));
+}
+
+/** Precompute φ(d) = ∫ bend along distance-from-rim. */
+function buildPhiTable(bevelPx: number): Float32Array {
+  const n = Math.max(1, Math.ceil(bevelPx));
+  const phi = new Float32Array(n + 1);
+  for (let d = 1; d <= n; d++) {
+    phi[d] = (phi[d - 1] ?? 0) + bendFromDepth(d / n);
+  }
+  return phi;
+}
+
+function samplePhi(phi: Float32Array, depth: number): number {
+  if (depth <= 0) return phi[0] ?? 0;
+  const max = phi.length - 1;
+  if (depth >= max) return phi[max] ?? 0;
+  const i = Math.floor(depth);
+  const f = depth - i;
+  return (phi[i] ?? 0) * (1 - f) + (phi[i + 1] ?? 0) * f;
+}
+
+/**
+ * R = horizontal bend, G = vertical bend, B = rim specular, A = shape mask.
+ * Neutral grey (128) means zero displacement.
+ */
+function computeDisplacementData(opts: {
+  width: number;
+  height: number;
+  radius: number;
+  bevelDepth: number;
+  dpr?: number;
+}) {
+  const dpr = opts.dpr ?? 1;
+  const gain = 1.35;
+  const light = { x: -0.55, y: -0.85 };
+  const lightLen = Math.hypot(light.x, light.y) || 1;
+  const lx = light.x / lightLen;
+  const ly = light.y / lightLen;
+
+  const W = Math.max(1, Math.round(opts.width * dpr));
+  const H = Math.max(1, Math.round(opts.height * dpr));
+  const halfW = W / 2;
+  const halfH = H / 2;
+  const r = Math.min(opts.radius * dpr, halfW, halfH);
+  const bevel = Math.max(1, opts.bevelDepth * dpr);
+  const phi = buildPhiTable(bevel);
+
+  // Height field over the shape, then displace along its gradient.
+  const field = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) {
+    const py = y - halfH + 0.5;
+    for (let x = 0; x < W; x++) {
+      const px = x - halfW + 0.5;
+      const d = sdRoundedBox(px, py, halfW, halfH, r);
+      const idx = y * W + x;
+      field[idx] = d > 0 ? 0 : samplePhi(phi, Math.min(bevel, -d));
+    }
+  }
+
+  const data = new Uint8ClampedArray(W * H * 4);
+  const EPS = 1;
+
+  for (let y = 0; y < H; y++) {
+    const py = y - halfH + 0.5;
+    for (let x = 0; x < W; x++) {
+      const px = x - halfW + 0.5;
+      const i = (y * W + x) << 2;
+      const d = sdRoundedBox(px, py, halfW, halfH, r);
+
+      if (d > 0) {
+        data[i] = 128;
+        data[i + 1] = 128;
+        data[i + 2] = 128;
+        data[i + 3] = 0;
+        continue;
+      }
+
+      const x0 = Math.max(0, x - EPS);
+      const x1 = Math.min(W - 1, x + EPS);
+      const y0 = Math.max(0, y - EPS);
+      const y1 = Math.min(H - 1, y + EPS);
+      const dPhiX =
+        ((field[y * W + x1] ?? 0) - (field[y * W + x0] ?? 0)) / (x1 - x0 || 1);
+      const dPhiY =
+        ((field[y1 * W + x] ?? 0) - (field[y0 * W + x] ?? 0)) / (y1 - y0 || 1);
+
+      // Cap so the rim compresses but never folds over itself.
+      const dx = Math.max(-1, Math.min(1, dPhiX * gain));
+      const dy = Math.max(-1, Math.min(1, dPhiY * gain));
+
+      // Rim light from surface normal (SDF gradient) · light dir.
+      let specular = 0;
+      if (d >= -bevel) {
+        const gx =
+          sdRoundedBox(px + EPS, py, halfW, halfH, r) -
+          sdRoundedBox(px - EPS, py, halfW, halfH, r);
+        const gy =
+          sdRoundedBox(px, py + EPS, halfW, halfH, r) -
+          sdRoundedBox(px, py - EPS, halfW, halfH, r);
+        const len = Math.hypot(gx, gy) || 1;
+        const nx = gx / len;
+        const ny = gy / len;
+        const facing = Math.max(0, nx * lx + ny * ly);
+        const opposite = Math.max(0, -(nx * lx + ny * ly)) * 0.35;
+        const rim = 1 - Math.min(1, -d / bevel);
+        specular = (facing + opposite) * rim;
+      }
+
+      data[i] = 128 + dx * 127;
+      data[i + 1] = 128 + dy * 127;
+      data[i + 2] = Math.round(specular * 255);
+      data[i + 3] = 255;
+    }
+  }
+
+  return { data, width: W, height: H };
+}
+
+/** PNG blob URL for feImage (WebKit rejects data: URIs inside feImage). */
+async function generateDisplacementBlobUrl(opts: {
+  width: number;
+  height: number;
+  radius: number;
+  bevelDepth: number;
+  dpr?: number;
+}): Promise<string> {
+  const { data, width, height } = computeDisplacementData(opts);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("2d context unavailable");
+  ctx.putImageData(new ImageData(data, width, height), 0, 0);
+
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, "image/png"),
+  );
+  if (!blob) throw new Error("Failed to encode displacement map");
+  return URL.createObjectURL(blob);
+}
+
+/** Inner `<filter>…</filter>` markup — optics via feDisplacementMap. */
+function buildFilterSvg(opts: {
+  id: string;
+  mapUrl: string;
+  width: number;
+  height: number;
+  scale: number;
+  aberration: number;
+  frost: number;
+}): string {
+  const { id, mapUrl, width, height, scale, aberration, frost } = opts;
+
+  const pad = Math.ceil(scale + aberration + 4);
+  const px = ((pad / Math.max(1, width)) * 100).toFixed(3);
+  const py = ((pad / Math.max(1, height)) * 100).toFixed(3);
+  const w = (100 + 2 * Number(px)).toFixed(3);
+  const h = (100 + 2 * Number(py)).toFixed(3);
+
+  // Pixel-sized map matched to the lens — % units stretch against the padded
+  // filter region and wash out the rim bend.
+  const map = `<feImage href="${mapUrl}" xlink:href="${mapUrl}" x="0" y="0" width="${width}" height="${height}" result="map" preserveAspectRatio="none"/>`;
+
+  let filter: string;
+  if (aberration <= 0) {
+    const blur =
+      frost > 0
+        ? `\n  <feGaussianBlur in="disp" stdDeviation="${frost}"/>`
+        : "";
+    filter = `<filter id="${id}" color-interpolation-filters="sRGB" x="-${px}%" y="-${py}%" width="${w}%" height="${h}%">
+  ${map}
+  <feDisplacementMap in="SourceGraphic" in2="map" scale="${scale}" xChannelSelector="R" yChannelSelector="G"${frost > 0 ? ` result="disp"` : ""}/>${blur}
+</filter>`;
+  } else {
+    const sR = scale + aberration;
+    const sG = scale;
+    const sB = Math.max(0, scale - aberration);
+    filter = `<filter id="${id}" color-interpolation-filters="sRGB" x="-${px}%" y="-${py}%" width="${w}%" height="${h}%">
+  ${map}
+  <feDisplacementMap in="SourceGraphic" in2="map" scale="${sR}" xChannelSelector="R" yChannelSelector="G" result="dispR"/>
+  <feColorMatrix in="dispR" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="red"/>
+  <feDisplacementMap in="SourceGraphic" in2="map" scale="${sG}" xChannelSelector="R" yChannelSelector="G" result="dispG"/>
+  <feColorMatrix in="dispG" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="green"/>
+  <feDisplacementMap in="SourceGraphic" in2="map" scale="${sB}" xChannelSelector="R" yChannelSelector="G" result="dispB"/>
+  <feColorMatrix in="dispB" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="blue"/>
+  <feBlend in="red" in2="green" mode="screen" result="rg"/>
+  <feBlend in="rg" in2="blue" mode="screen" result="rgb"/>
+  <feGaussianBlur in="rgb" stdDeviation="${frost}"/>
+</filter>`;
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="0" height="0" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">${filter}</svg>`;
+}
+
+/** Full-bleed liquid glass pane. It refracts what is painted below it. */
+const LiquidGlassLayer = ({
+  className,
+  radius = 0,
+  bevelDepth = 56,
+  scale = 90,
+  aberration = 5,
+  frost = 0.2,
+  tint = 0.04,
+}: LiquidGlassLayerProps) => {
+  const reactId = useId().replace(/:/g, "");
+  const rootRef = useRef<HTMLDivElement>(null);
+  const blobRef = useRef<string | null>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  const [filterSvg, setFilterSvg] = useState("");
+  const [filterId, setFilterId] = useState("");
+  const [refract, setRefract] = useState(false);
+  // Safari's backdrop-filter:url(#svg) path is unreliable — use frosted glass.
+  const [simpleGlass, setSimpleGlass] = useState(false);
+
+  useEffect(() => {
+    setSimpleGlass(isSafariLike() || prefersReducedTransparency());
+  }, []);
+
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || simpleGlass) return;
+
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const box = entry.borderBoxSize?.[0];
+      const width = box?.inlineSize ?? entry.contentRect.width;
+      const height = box?.blockSize ?? entry.contentRect.height;
+      setSize({
+        w: Math.max(1, Math.round(width)),
+        h: Math.max(1, Math.round(height)),
+      });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [simpleGlass]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function build() {
+      if (
+        simpleGlass ||
+        size.w <= 0 ||
+        size.h <= 0 ||
+        !supportsUrlBackdropFilter() ||
+        prefersReducedTransparency()
+      ) {
+        if (blobRef.current) {
+          URL.revokeObjectURL(blobRef.current);
+          blobRef.current = null;
+        }
+        if (!cancelled) {
+          setFilterSvg("");
+          setFilterId("");
+          setRefract(false);
+        }
+        return;
+      }
+
+      const r = Math.min(radius, size.w / 2, size.h / 2);
+      // dpr capped at 1 — the pane covers the whole page and the map is O(w*h).
+      const mapUrl = await generateDisplacementBlobUrl({
+        width: size.w,
+        height: size.h,
+        radius: r,
+        bevelDepth: Math.min(bevelDepth, Math.min(size.w, size.h) / 2),
+        dpr: 1,
+      });
+
+      if (cancelled) {
+        URL.revokeObjectURL(mapUrl);
+        return;
+      }
+
+      if (blobRef.current) URL.revokeObjectURL(blobRef.current);
+      blobRef.current = mapUrl;
+
+      // Fresh id each rebuild — Safari caches filter output by id.
+      const id = `lg-${reactId}-${size.w}x${size.h}-${Date.now().toString(36)}`;
+      const svg = buildFilterSvg({
+        id,
+        mapUrl,
+        width: size.w,
+        height: size.h,
+        scale,
+        aberration,
+        frost,
+      });
+
+      // Ensure the map image is decoded before the filter attaches.
+      await new Promise<void>((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve();
+        img.onerror = () => resolve();
+        img.src = mapUrl;
+      });
+
+      if (cancelled) return;
+      setFilterId(id);
+      setFilterSvg(svg);
+      setRefract(true);
+    }
+
+    void build();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    simpleGlass,
+    size.w,
+    size.h,
+    radius,
+    bevelDepth,
+    scale,
+    aberration,
+    frost,
+    reactId,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      if (blobRef.current) {
+        URL.revokeObjectURL(blobRef.current);
+        blobRef.current = null;
+      }
+    };
+  }, []);
+
+  // Single filter in the chain — every extra step re-filters the whole
+  // backdrop each frame while the clouds animate.
+  const backdropFilter = refract
+    ? `url(#${filterId}) saturate(1.5)`
+    : simpleGlass
+      ? "blur(8px) saturate(1.4)"
+      : "blur(10px) saturate(1.6) brightness(1.04)";
+
+  const style: CSSProperties = {
+    borderRadius: radius,
+    background: `rgb(255 255 255 / ${simpleGlass ? 0.16 : tint})`,
+    backdropFilter,
+    WebkitBackdropFilter: backdropFilter,
+  };
+
+  return (
+    <div
+      ref={rootRef}
+      aria-hidden
+      className={`pointer-events-none overflow-hidden ${className ?? ""}`}
+      style={style}
+    >
+      {filterSvg ? (
+        <span
+          key={filterId}
+          className="pointer-events-none absolute size-0 overflow-hidden"
+          dangerouslySetInnerHTML={{ __html: filterSvg }}
+        />
+      ) : null}
+    </div>
+  );
+};
+
+
+File location: components/ui/cloud-shader.tsx
+
+File content: "use client";
+
+import React, { useEffect, useRef } from "react";
+import { cn } from "@/lib/utils";
+
+export type CloudShaderProps = {
+  className?: string;
+  children?: React.ReactNode;
+  /** Animation speed multiplier. 1 = default drift. */
+  speed?: number;
+  /** Number of clouds (1-6). */
+  count?: number;
+  /** Cloud tint color (hex or rgb string). */
+  cloudColor?: string;
+  /** Sky color at the top (hex or rgb string). */
+  skyTopColor?: string;
+  /** Sky color at the bottom (hex or rgb string). */
+  skyBottomColor?: string;
+};
+
+const VERT = `
+attribute vec2 a_pos;
+varying vec2 v_uv;
+void main() {
+  v_uv = a_pos * 0.5 + 0.5;
+  gl_Position = vec4(a_pos, 0.0, 1.0);
+}
+`;
+
+// Original cloud shader for Aceternity UI.
+// Each cloud is an asymmetric envelope (dome top, flat base) filled with
+// domain-warped billow noise. A second density sample above the pixel
+// approximates self-shadowing. Clouds drift horizontally and wrap around.
+const FRAG = `
+precision highp float;
+
+varying vec2 v_uv;
+
+uniform vec2 u_res;
+uniform float u_time;
+uniform float u_count;
+uniform vec3 u_cloud;
+uniform vec3 u_skyTop;
+uniform vec3 u_skyBottom;
+
+const mat2 R = mat2(0.80, 0.60, -0.60, 0.80);
+
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(41.31, 289.17))) * 26737.367);
+}
+
+float vnoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = hash(i);
+  float b = hash(i + vec2(1.0, 0.0));
+  float c = hash(i + vec2(0.0, 1.0));
+  float d = hash(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+float fbm(vec2 p) {
+  float sum = 0.0;
+  float amp = 0.5;
+  for (int i = 0; i < 4; i++) {
+    sum += amp * vnoise(p);
+    p = R * p * 2.03 + 19.19;
+    amp *= 0.5;
+  }
+  return sum;
+}
+
+// billow noise: sharp puffy ridges, like cauliflower cloud tops
+float billow(vec2 p) {
+  float sum = 0.0;
+  float amp = 0.5;
+  for (int i = 0; i < 5; i++) {
+    sum += amp * (1.0 - abs(2.0 * vnoise(p) - 1.0));
+    p = R * p * 2.11 + 13.37;
+    amp *= 0.5;
+  }
+  return sum;
+}
+
+// raw density for one cloud at point p
+float cloudDensity(vec2 p, vec2 c, vec2 r, float seed, float t) {
+  vec2 q = p - c;
+
+  // envelope: dome above the center, flat base below
+  float ry = q.y > 0.0 ? r.y : r.y * 0.42;
+  float env = 1.0 - length(vec2(q.x / r.x, q.y / ry));
+  if (env < -0.35) return 0.0;
+
+  // domain-warped billow detail, moves with the cloud, evolves slowly
+  vec2 dp = q * (2.4 / r.x) + seed;
+  dp += 0.6 * vec2(
+    fbm(dp * 1.4 + t * 0.04),
+    fbm(dp * 1.4 + 7.7 - t * 0.03)
+  );
+  float detail = billow(dp * 1.6);
+
+  return env + (detail - 0.62) * 0.62;
+}
+
+// shades one cloud and blends it over the current color
+vec3 shadeCloud(vec3 color, vec3 sky, vec2 p, vec2 c, vec2 r, float seed, float t, float dist) {
+  float d = cloudDensity(p, c, r, seed, t);
+  if (d < 0.02) return color;
+
+  // sample density toward the sun (straight up) for self-shadowing
+  float dUp = cloudDensity(p + vec2(0.0, r.y * 0.55), c, r, seed, t);
+  float occl = clamp((dUp - d) * 1.1 + d * 0.55, 0.0, 1.0);
+
+  vec3 lit = u_cloud * 1.04;
+  vec3 shadow = mix(u_cloud * 0.60, sky, 0.38);
+  vec3 cloudCol = mix(lit, shadow, occl * 0.85);
+
+  float alpha = smoothstep(0.02, 0.38, d);
+
+  // silver lining on thin edges
+  float rim = smoothstep(0.02, 0.14, d) * (1.0 - smoothstep(0.14, 0.40, d));
+  cloudCol += rim * 0.10;
+
+  // atmospheric perspective: far clouds fade into the sky
+  cloudCol = mix(cloudCol, sky, dist * 0.35);
+  alpha *= mix(1.0, 0.8, dist);
+
+  return mix(color, cloudCol, alpha);
+}
+
+// one drifting cloud: horizontal wrap + gentle vertical bob
+vec3 cloudPass(vec3 color, vec3 sky, vec2 p, float aspect, float t,
+               float spd, float phase, float y, vec2 r, float seed, float dist) {
+  float cx = mix(-r.x - 0.25, aspect + r.x + 0.25, fract(t * spd + phase));
+  float cy = y + sin(t * 0.05 + phase * 6.2831) * 0.012;
+  return shadeCloud(color, sky, p, vec2(cx, cy), r, seed, t, dist);
+}
+
+void main() {
+  float aspect = u_res.x / u_res.y;
+  vec2 p = vec2(v_uv.x * aspect, v_uv.y);
+  float t = u_time;
+
+  vec3 sky = mix(u_skyBottom, u_skyTop, v_uv.y);
+  vec3 color = sky;
+
+  // faint haze band near the horizon
+  color = mix(color, u_skyBottom * 1.06, smoothstep(0.35, 0.0, v_uv.y) * 0.5);
+
+  // soft sun glow, upper area
+  vec2 sunPos = vec2(aspect * 0.78, 0.92);
+  float sunDist = length(p - sunPos);
+  color += vec3(1.0, 0.95, 0.82) * exp(-sunDist * sunDist * 5.0) * 0.28;
+
+  // thin cirrus streaks, stretched horizontally, high in the sky
+  float cirrusBand = smoothstep(0.55, 0.8, v_uv.y) * (1.0 - smoothstep(0.9, 1.0, v_uv.y));
+  if (cirrusBand > 0.01) {
+    float streak = fbm(vec2(p.x * 1.6 - t * 0.006, p.y * 12.0));
+    float wisp = smoothstep(0.52, 0.78, streak) * cirrusBand;
+    color = mix(color, u_cloud * 0.98, wisp * 0.35);
+  }
+
+  // far layer: small, high, slow
+  if (u_count > 5.5) {
+    color = cloudPass(color, sky, p, aspect, t, 0.006, 0.10, 0.84, vec2(0.20, 0.10), 43.7, 1.0);
+  }
+  if (u_count > 4.5) {
+    color = cloudPass(color, sky, p, aspect, t, 0.008, 0.62, 0.73, vec2(0.24, 0.12), 71.3, 0.85);
+  }
+
+  // middle layer
+  if (u_count > 3.5) {
+    color = cloudPass(color, sky, p, aspect, t, 0.011, 0.33, 0.60, vec2(0.34, 0.16), 17.3, 0.55);
+  }
+  if (u_count > 2.5) {
+    color = cloudPass(color, sky, p, aspect, t, 0.013, 0.80, 0.47, vec2(0.30, 0.15), 29.9, 0.45);
+  }
+
+  // near layer: big, low, fast
+  if (u_count > 1.5) {
+    color = cloudPass(color, sky, p, aspect, t, 0.016, 0.05, 0.35, vec2(0.46, 0.20), 91.1, 0.15);
+  }
+  color = cloudPass(color, sky, p, aspect, t, 0.020, 0.48, 0.20, vec2(0.56, 0.24), 57.2, 0.0);
+
+  gl_FragColor = vec4(color, 1.0);
+}
+`;
+
+function parseHex(color: string): [number, number, number] {
+  const value = color.trim();
+  if (value.startsWith("#")) {
+    const hex = value.slice(1);
+    if (hex.length === 3) {
+      return [
+        parseInt(hex[0] + hex[0], 16) / 255,
+        parseInt(hex[1] + hex[1], 16) / 255,
+        parseInt(hex[2] + hex[2], 16) / 255,
+      ];
+    }
+    return [
+      parseInt(hex.slice(0, 2), 16) / 255,
+      parseInt(hex.slice(2, 4), 16) / 255,
+      parseInt(hex.slice(4, 6), 16) / 255,
+    ];
+  }
+  const rgb = value.match(/[\d.]+/g);
+  if (rgb && rgb.length >= 3) {
+    return [Number(rgb[0]) / 255, Number(rgb[1]) / 255, Number(rgb[2]) / 255];
+  }
+  return [0.95, 0.95, 0.95];
+}
+
+function compile(gl: WebGLRenderingContext, type: number, source: string) {
+  const shader = gl.createShader(type);
+  if (!shader) return null;
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    gl.deleteShader(shader);
+    return null;
+  }
+  return shader;
+}
+
+export const CloudShader = ({
+  className,
+  children,
+  speed = 1,
+  count = 6,
+  cloudColor = "#fbf8f2",
+  skyTopColor = "#3876ba",
+  skyBottomColor = "#8cbfe8",
+}: CloudShaderProps) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const paramsRef = useRef({
+    speed,
+    count,
+    cloudColor,
+    skyTopColor,
+    skyBottomColor,
+  });
+
+  paramsRef.current = {
+    speed,
+    count,
+    cloudColor,
+    skyTopColor,
+    skyBottomColor,
+  };
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const gl = canvas.getContext("webgl", {
+      alpha: false,
+      antialias: false,
+      premultipliedAlpha: false,
+    });
+    if (!gl) return;
+
+    const vert = compile(gl, gl.VERTEX_SHADER, VERT);
+    const frag = compile(gl, gl.FRAGMENT_SHADER, FRAG);
+    if (!vert || !frag) return;
+
+    const program = gl.createProgram();
+    if (!program) return;
+    gl.attachShader(program, vert);
+    gl.attachShader(program, frag);
+    gl.bindAttribLocation(program, 0, "a_pos");
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return;
+    gl.useProgram(program);
+
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array([-1, -1, 3, -1, -1, 3]),
+      gl.STATIC_DRAW,
+    );
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+    const loc = {
+      res: gl.getUniformLocation(program, "u_res"),
+      time: gl.getUniformLocation(program, "u_time"),
+      count: gl.getUniformLocation(program, "u_count"),
+      cloud: gl.getUniformLocation(program, "u_cloud"),
+      skyTop: gl.getUniformLocation(program, "u_skyTop"),
+      skyBottom: gl.getUniformLocation(program, "u_skyBottom"),
+    };
+
+    let frame = 0;
+    let running = true;
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      const w = Math.max(1, Math.floor(width * dpr));
+      const h = Math.max(1, Math.floor(height * dpr));
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      gl.viewport(0, 0, w, h);
+      gl.uniform2f(loc.res, w, h);
+    };
+
+    const observer = new ResizeObserver(resize);
+    observer.observe(canvas);
+    resize();
+
+    const start = performance.now();
+    const draw = (now: number) => {
+      if (!running) return;
+      const p = paramsRef.current;
+      const elapsed = reduceMotion ? 0 : ((now - start) / 1000) * p.speed;
+      const cloud = parseHex(p.cloudColor);
+      const skyTop = parseHex(p.skyTopColor);
+      const skyBottom = parseHex(p.skyBottomColor);
+
+      gl.uniform1f(loc.time, elapsed);
+      gl.uniform1f(loc.count, Math.min(6, Math.max(1, p.count)));
+      gl.uniform3f(loc.cloud, cloud[0], cloud[1], cloud[2]);
+      gl.uniform3f(loc.skyTop, skyTop[0], skyTop[1], skyTop[2]);
+      gl.uniform3f(loc.skyBottom, skyBottom[0], skyBottom[1], skyBottom[2]);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      frame = requestAnimationFrame(draw);
+    };
+
+    frame = requestAnimationFrame(draw);
+
+    return () => {
+      running = false;
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      gl.deleteBuffer(buffer);
+      gl.deleteProgram(program);
+      gl.deleteShader(vert);
+      gl.deleteShader(frag);
+    };
+  }, []);
+
+  return (
+    <div
+      className={cn(
+        "relative h-full min-h-80 w-full overflow-hidden",
+        className,
+      )}
+    >
+      <canvas
+        ref={canvasRef}
+        className="pointer-events-none absolute inset-0 h-full w-full"
+      />
+      {children ? (
+        <div className="relative z-10 flex h-full w-full items-center justify-center">
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+
+
+
+
+You are given a task to integrate a React component into your codebase.
+Please verify your project has the following setup:
+- shadcn/ui project structure
+- Tailwind CSS v4.0
+- TypeScript
+
+If any of these are missing, provide instructions on how to setup project via shadcn CLI, install Tailwind or Typescript.
+
+Determine the default path for components and styles. 
+If default path for components is not /components/ui, provide instructions on why it's important to create this folder
+Copy-paste this component to /components/ui folder:
+File location: components/text-flipping-board-demo.tsx
+
+File content: "use client";
+import React, { useState, useEffect, useCallback } from "react";
+import { TextFlippingBoard } from "@/components/ui/text-flipping-board";
+
+const MESSAGES: string[] = [
+  "STAY HUNGRY \nSTAY IN BED \n- STEVE JOBS",
+  "What did you get done this week?",
+  "I burned $20 \nfor this shit.",
+  "DONT WORRY \nBE HAPPY FFS.",
+  "LADIES AND GENTLEMEN \nWELCOME TO F#!@# C!@$",
+];
+
+export default function TextFlippingBoardDemo() {
+  const [msgIdx, setMsgIdx] = useState(0);
+
+  const next = useCallback(
+    () => setMsgIdx((i) => (i + 1) % MESSAGES.length),
+    [],
+  );
+
+  useEffect(() => {
+    const id = setInterval(next, 6000);
+    return () => clearInterval(id);
+  }, [next]);
+
+  return (
+    <div className="flex w-full flex-col items-center justify-center gap-8 py-20">
+      <TextFlippingBoard text={MESSAGES[msgIdx]} />
+    </div>
+  );
+}
+
+
+File location: components/ui/text-flipping-board.tsx
+
+File content: "use client";
+
+import React, { useEffect, useRef, useState, useMemo } from "react";
+import { motion } from "motion/react";
+import { cn } from "@/lib/utils";
+
+const FLAP_CHARS = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$()-+&=;:'\"%,./?°";
+
+const BOARD_ROWS = 6;
+const BOARD_COLS = 22;
+
+const BASE_COL_DELAY = 30;
+const BASE_ROW_DELAY = 20;
+const BASE_STEP_MS = 55;
+const BASE_FLIP_S = 0.35;
+const BASE_TOTAL_S =
+  ((BOARD_COLS - 1) * BASE_COL_DELAY +
+    (BOARD_ROWS - 1) * BASE_ROW_DELAY +
+    8 * BASE_STEP_MS) /
+  1000;
+
+type AccentColor = {
+  top: string;
+  bottom: string;
+  text: string;
+};
+
+const ACCENT_COLORS: AccentColor[] = [
+  { top: "bg-red-600", bottom: "bg-red-700", text: "text-white" },
+  { top: "bg-orange-500", bottom: "bg-orange-600", text: "text-white" },
+  { top: "bg-yellow-400", bottom: "bg-yellow-500", text: "text-neutral-900" },
+  { top: "bg-green-600", bottom: "bg-green-700", text: "text-white" },
+  { top: "bg-blue-600", bottom: "bg-blue-700", text: "text-white" },
+  { top: "bg-violet-600", bottom: "bg-violet-700", text: "text-white" },
+  { top: "bg-white", bottom: "bg-neutral-100", text: "text-neutral-900" },
+];
+
+const CELL_TEXT_STYLE: React.CSSProperties = {
+  fontSize: "clamp(6px, 2vw, 22px)",
+  lineHeight: 1,
+};
+
+// ── Individual Split-Flap Character ───────────────────────────────────
+
+const FlapCell = React.memo(function FlapCell({
+  target,
+  delay,
+  stepMs,
+  flipDuration,
+}: {
+  target: string;
+  delay: number;
+  stepMs: number;
+  flipDuration: number;
+}) {
+  const [current, setCurrent] = useState(" ");
+  const [prev, setPrev] = useState(" ");
+  const [flipId, setFlipId] = useState(0);
+  const [accent, setAccent] = useState<AccentColor | null>(null);
+  const [prevAccent, setPrevAccent] = useState<AccentColor | null>(null);
+  const curRef = useRef(" ");
+  const tgtRef = useRef<string | null>(null);
+  const accentRef = useRef<AccentColor | null>(null);
+  const startTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stepTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (startTimer.current) clearTimeout(startTimer.current);
+    if (stepTimer.current) clearTimeout(stepTimer.current);
+    startTimer.current = null;
+    stepTimer.current = null;
+
+    const normalized = FLAP_CHARS.includes(target.toUpperCase())
+      ? target.toUpperCase()
+      : " ";
+    if (normalized === tgtRef.current) return;
+    tgtRef.current = normalized;
+
+    if (normalized === " " && curRef.current === " ") return;
+
+    const scrambleCount =
+      normalized === " "
+        ? 8 + Math.floor(Math.random() * 8)
+        : 25 + Math.floor(Math.random() * 15);
+
+    const runStep = (i: number) => {
+      const isLast = i === scrambleCount;
+      const ch = isLast
+        ? normalized
+        : FLAP_CHARS[1 + Math.floor(Math.random() * (FLAP_CHARS.length - 1))];
+
+      const newAccent = isLast
+        ? null
+        : Math.random() < 0.2
+          ? ACCENT_COLORS[Math.floor(Math.random() * ACCENT_COLORS.length)]
+          : null;
+
+      setPrev(curRef.current);
+      setPrevAccent(accentRef.current);
+      curRef.current = ch;
+      accentRef.current = newAccent;
+      setCurrent(ch);
+      setAccent(newAccent);
+      setFlipId((n) => n + 1);
+
+      if (!isLast) {
+        stepTimer.current = setTimeout(() => runStep(i + 1), stepMs);
+      }
+    };
+
+    startTimer.current = setTimeout(() => runStep(1), delay);
+
+    return () => {
+      if (startTimer.current) clearTimeout(startTimer.current);
+      if (stepTimer.current) clearTimeout(stepTimer.current);
+      startTimer.current = null;
+      stepTimer.current = null;
+      tgtRef.current = null;
+    };
+  }, [target, delay, stepMs]);
+
+  const show = current === " " ? "\u00A0" : current;
+  const showPrev = prev === " " ? "\u00A0" : prev;
+
+  const textCx =
+    "absolute inset-x-0 flex select-none items-center justify-center font-mono font-bold tracking-wide";
+  const topBg = accent?.top ?? "bg-neutral-200/80 dark:bg-neutral-900";
+  const bottomBg = accent?.bottom ?? "bg-neutral-200/80 dark:bg-neutral-900";
+  const textColor = accent?.text ?? "text-neutral-800 dark:text-white";
+
+  const flapTopBg = prevAccent?.top ?? "bg-neutral-100 dark:bg-neutral-800";
+  const flapTextColor = prevAccent?.text ?? "text-neutral-800 dark:text-white";
+
+  const bottomDelay = flipDuration * 0.5;
+
+  return (
+    <div className="flex aspect-3/6 flex-col overflow-hidden rounded-[2px] border border-neutral-300 md:rounded-[3px] md:border-2 dark:border-black">
+      {/* Flap content area */}
+      <div className="relative flex-1 perspective-dramatic transform-3d">
+        <div className="absolute inset-0 z-40 hidden flex-row items-center justify-center md:flex">
+          <div className="h-1/2 w-px rounded-tr-sm rounded-br-sm bg-neutral-300 dark:bg-black" />
+          <div className="flex h-px flex-1 bg-neutral-300 dark:bg-black" />
+          <div className="h-1/2 w-px rounded-tl-sm rounded-bl-sm bg-neutral-300 dark:bg-black" />
+        </div>
+
+        {/* Static top – new character top half */}
+        <div
+          className={cn(
+            "absolute inset-x-0 top-0 h-[calc(50%-0.5px)] overflow-hidden rounded-t-[3px]",
+            topBg,
+          )}
+        >
+          <div
+            className={cn(textCx, textColor, "top-0 h-[200%]")}
+            style={CELL_TEXT_STYLE}
+          >
+            {show}
+          </div>
+        </div>
+
+        {/* Static bottom – new character bottom half */}
+        <div
+          className={cn(
+            "absolute inset-x-0 bottom-0 h-[calc(50%-0.5px)] overflow-hidden rounded-b-[3px]",
+            bottomBg,
+          )}
+        >
+          <div
+            className={cn(textCx, textColor, "bottom-0 h-[200%]")}
+            style={CELL_TEXT_STYLE}
+          >
+            {show}
+          </div>
+          {flipId > 0 && (
+            <motion.div
+              key={`s${flipId}`}
+              className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.8),transparent_60%)] dark:bg-[linear-gradient(to_bottom,rgba(0,0,0,0.8),transparent_60%)]"
+              initial={{ opacity: 0.5 }}
+              animate={{ opacity: 0 }}
+              transition={{ duration: flipDuration * 1.3, ease: "easeOut" }}
+            />
+          )}
+        </div>
+
+        {/* Flipping top flap – old character top half, drops down */}
+        {flipId > 0 && (
+          <motion.div
+            key={flipId}
+            className={cn(
+              "absolute inset-x-0 top-0 z-10 h-[calc(50%-0.5px)] origin-bottom overflow-hidden rounded-t-[3px] backface-hidden transform-3d",
+              flapTopBg,
+            )}
+            initial={{ rotateX: 0 }}
+            animate={{ rotateX: -100 }}
+            transition={{
+              duration: flipDuration,
+              ease: [0.55, 0.055, 0.675, 0.19],
+            }}
+          >
+            <div
+              className={cn(textCx, flapTextColor, "top-0 h-[200%]")}
+              style={CELL_TEXT_STYLE}
+            >
+              {showPrev}
+            </div>
+            <motion.div
+              className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0),rgba(255,255,255,1))] dark:bg-[linear-gradient(to_bottom,rgba(0,0,0,0),rgba(0,0,0,1))]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.6 }}
+              transition={{ duration: flipDuration }}
+            />
+          </motion.div>
+        )}
+
+        {/* Flipping bottom flap – new character bottom half, rises up */}
+        {flipId > 0 && (
+          <motion.div
+            key={`b${flipId}`}
+            className={cn(
+              "absolute inset-x-0 bottom-0 z-10 h-[calc(50%-0.5px)] origin-top overflow-hidden rounded-b-[3px] backface-hidden transform-3d",
+              bottomBg,
+            )}
+            initial={{ rotateX: 90 }}
+            animate={{ rotateX: 0 }}
+            transition={{
+              duration: flipDuration * 0.85,
+              delay: bottomDelay,
+              ease: [0.33, 1.55, 0.64, 1],
+            }}
+          >
+            <div
+              className={cn(textCx, textColor, "bottom-0 h-[200%]")}
+              style={CELL_TEXT_STYLE}
+            >
+              {show}
+            </div>
+            <motion.div
+              className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_top,rgba(255,255,255,0),rgba(255,255,255,0.6))] dark:bg-[linear-gradient(to_top,rgba(0,0,0,0),rgba(0,0,0,0.6))]"
+              initial={{ opacity: 0.4 }}
+              animate={{ opacity: 0 }}
+              transition={{
+                duration: flipDuration * 0.85,
+                delay: bottomDelay,
+              }}
+            />
+          </motion.div>
+        )}
+
+        {/* Split line */}
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 z-20 h-px -translate-y-[0.5px] bg-neutral-400/50 dark:bg-black/50" />
+      </div>
+
+      {/* Bottom stripes – decorative, outside the flap area */}
+      <div className="h-2 w-full bg-[repeating-linear-gradient(to_bottom,currentColor_0,currentColor_1px,transparent_1px,transparent_0.15rem)] mask-t-from-50% text-neutral-400 opacity-20 md:h-4 md:bg-[repeating-linear-gradient(to_bottom,currentColor_0,currentColor_1px,transparent_1px,transparent_0.2rem)] dark:text-black dark:opacity-100" />
+    </div>
+  );
+},
+(prevProps, nextProps) =>
+  prevProps.target === nextProps.target &&
+  prevProps.delay === nextProps.delay &&
+  prevProps.stepMs === nextProps.stepMs &&
+  prevProps.flipDuration === nextProps.flipDuration,
+);
+
+// ── Color Tile ────────────────────────────────────────────────────────
+
+const COLOR_MAP: Record<string, string> = {
+  "{R}": "#D32F2F",
+  "{O}": "#F57C00",
+  "{Y}": "#FBC02D",
+  "{G}": "#43A047",
+  "{B}": "#1E88E5",
+  "{V}": "#8E24AA",
+  "{W}": "#FAFAFA",
+};
+
+const ColorCell = React.memo(function ColorCell({ color }: { color: string }) {
+  return (
+    <div
+      className="aspect-3/5 rounded-[3px] border-2 border-neutral-300 dark:border-black"
+      style={{ backgroundColor: color }}
+    />
+  );
+});
+
+// ── Row Parser ────────────────────────────────────────────────────────
+
+type ParsedCell =
+  | { type: "char"; value: string }
+  | { type: "color"; hex: string };
+
+function parseRow(row: string): ParsedCell[] {
+  const cells: ParsedCell[] = [];
+  let i = 0;
+  while (i < row.length) {
+    if (row[i] === "{" && i + 2 < row.length && row[i + 2] === "}") {
+      const code = row.substring(i, i + 3);
+      if (COLOR_MAP[code]) {
+        cells.push({ type: "color", hex: COLOR_MAP[code] });
+        i += 3;
+        continue;
+      }
+    }
+    cells.push({ type: "char", value: row[i] });
+    i++;
+  }
+  return cells;
+}
+
+// ── Word Wrap ─────────────────────────────────────────────────────────
+
+function wrapParagraph(paragraph: string, maxCols: number): string[] {
+  const lines: string[] = [];
+  const words = paragraph.split(/[ \t]+/).filter(Boolean);
+  let currentLine = "";
+
+  for (const word of words) {
+    if (word.length > maxCols) {
+      if (currentLine) {
+        lines.push(currentLine);
+        currentLine = "";
+      }
+      lines.push(word.slice(0, maxCols));
+      continue;
+    }
+
+    if (!currentLine) {
+      currentLine = word;
+    } else if (currentLine.length + 1 + word.length <= maxCols) {
+      currentLine += " " + word;
+    } else {
+      lines.push(currentLine);
+      currentLine = word;
+    }
+  }
+
+  if (currentLine) lines.push(currentLine);
+  return lines;
+}
+
+function wrapText(input: string, maxCols: number): string[] {
+  return input
+    .split("\n")
+    .flatMap((paragraph) =>
+      paragraph.trim() === "" ? [""] : wrapParagraph(paragraph, maxCols),
+    );
+}
+
+// ── Main TextFlippingBoard Component ──────────────────────────────────
+
+export interface TextFlippingBoardProps {
+  rows?: string[];
+  text?: string;
+  className?: string;
+  /** Total animation duration in seconds. Defaults to ~1.2s. */
+  duration?: number;
+}
+
+export function TextFlippingBoard({
+  rows,
+  text,
+  className,
+  duration = BASE_TOTAL_S,
+}: TextFlippingBoardProps) {
+  const scale = duration / BASE_TOTAL_S;
+  const colDelay = BASE_COL_DELAY * scale;
+  const rowDelay = BASE_ROW_DELAY * scale;
+  const stepMs = BASE_STEP_MS * scale;
+  const flipDur = Math.min(0.6, Math.max(0.15, BASE_FLIP_S * scale));
+
+  const board = useMemo(() => {
+    const grid: ParsedCell[][] = Array.from({ length: BOARD_ROWS }, () =>
+      Array.from({ length: BOARD_COLS }, () => ({
+        type: "char" as const,
+        value: " ",
+      })),
+    );
+
+    if (text) {
+      const lines = wrapText(text, BOARD_COLS).slice(0, BOARD_ROWS);
+      const startRow = Math.max(0, Math.floor((BOARD_ROWS - lines.length) / 2));
+      lines.forEach((line, i) => {
+        const row = startRow + i;
+        if (row >= BOARD_ROWS) return;
+        const parsed = parseRow(line);
+        const startCol = Math.max(
+          0,
+          Math.floor((BOARD_COLS - parsed.length) / 2),
+        );
+        parsed.forEach((cell, c) => {
+          if (startCol + c < BOARD_COLS) {
+            grid[row][startCol + c] = cell;
+          }
+        });
+      });
+    } else if (rows) {
+      rows.forEach((row, r) => {
+        if (r >= BOARD_ROWS) return;
+        const parsed = parseRow(row);
+        parsed.forEach((cell, c) => {
+          if (c < BOARD_COLS) {
+            grid[r][c] = cell;
+          }
+        });
+      });
+    }
+
+    return grid;
+  }, [rows, text]);
+
+  return (
+    <div
+      className={cn(
+        "relative mx-auto w-full max-w-3xl rounded-xl bg-neutral-100 p-2 shadow-xl md:rounded-2xl md:p-4 dark:bg-neutral-900 dark:shadow-[0_20px_70px_-15px_rgba(0,0,0,0.6)]",
+        className,
+      )}
+    >
+      <div
+        className="grid gap-px md:gap-[3px]"
+        style={{ gridTemplateColumns: `repeat(${BOARD_COLS}, 1fr)` }}
+      >
+        {board.map((row, r) =>
+          row.map((cell, c) =>
+            cell.type === "color" ? (
+              <ColorCell key={`${r}-${c}`} color={cell.hex} />
+            ) : (
+              <FlapCell
+                key={`${r}-${c}`}
+                target={cell.value}
+                delay={c * colDelay + r * rowDelay}
+                stepMs={stepMs}
+                flipDuration={flipDur}
+              />
+            ),
+          ),
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+
+
+

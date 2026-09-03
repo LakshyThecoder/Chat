@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isChamberLocator } from "@/src/domain/chamber/locator";
 import {
   createFlyRightProvider,
 } from "@/src/infrastructure/providers/flyright/service";
@@ -113,6 +114,14 @@ export async function POST(request: NextRequest) {
             "locator, lastName, amount and idempotencyKey are required.",
             correlationId,
             400,
+          );
+        }
+        if (isChamberLocator(parsed.data.locator)) {
+          return createErrorResponse(
+            "APPROVAL_REQUIRED",
+            "Chamber tickets cannot be filed from the public counter. Open Aegis, sign, then use submit_claim on that page.",
+            correlationId,
+            403,
           );
         }
         const claim = await flyright.submitClaim(parsed.data);

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomBytes } from "crypto";
 import { createAdminSupabaseClient } from "@/src/infrastructure/db/supabase/admin";
 import { evaluateSubscriptionRefund } from "@/src/domain/eligibility/evaluate-subscription-refund";
 import { normalizeSqlMoney } from "@/src/domain/money/cents";
@@ -48,6 +49,11 @@ function mapRefund(row: Record<string, unknown>): StreamlyRefund {
     createdAt: String(row.created_at),
   };
 }
+
+const THEATER_TEMPLATE = {
+  subscriptionId: "SL-1001",
+  accountEmail: "camille.moreau@example.com",
+} as const;
 
 export class StreamlyProvider {
   constructor(private readonly client = createAdminSupabaseClient()) {}
@@ -244,6 +250,43 @@ export class StreamlyProvider {
       throw new StreamlyNotFoundError();
     }
     return mapRefund(data);
+  }
+
+  async issueTheaterSubscription(): Promise<StreamlySubscription> {
+    const template = await this.getSubscription(THEATER_TEMPLATE.subscriptionId, THEATER_TEMPLATE.accountEmail);
+
+    const cancelledAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const lastChargedAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const suffix = randomBytes(3).toString("hex").toUpperCase();
+      const subscriptionId = `SL-${suffix}`;
+      const { data, error } = await this.client
+        .from("streamly_subscriptions")
+        .insert({
+          subscription_id: subscriptionId,
+          account_email: template.accountEmail,
+          plan_name: template.planName,
+          monthly_price: template.monthlyPrice,
+          currency: template.currency,
+          status: "cancelled",
+          cancelled_at: cancelledAt,
+          last_charged_at: lastChargedAt,
+          last_charge_amount: template.lastChargeAmount,
+        })
+        .select("*")
+        .single();
+
+      if (!error && data) {
+        return mapSubscription(data);
+      }
+      if (error?.code === "23505") {
+        continue;
+      }
+      throw new Error(error?.message ?? "Streamly could not issue a theater subscription.");
+    }
+
+    throw new Error("Streamly could not issue a unique theater subscription.");
   }
 }
 

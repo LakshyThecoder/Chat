@@ -1,0 +1,29 @@
+.chamber-root {
+  background-color: #071525;
+  background-image:
+    linear-gradient(180deg, rgba(232, 184, 74, 0.05), transparent 28%),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 47px,
+      rgba(232, 184, 74, 0.04) 48px
+    );
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+.chamber-pulse {
+  box-shadow: inset 0 0 0 2px #8a3b12;
+}
+
+.chamber-pulse-desk {
+  box-shadow: inset 0 0 0 2px #e8b84a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chamber-pulse,
+  .chamber-pulse-desk {
+    box-shadow: none;
+    outline: 2px solid currentColor;
+    outline-offset: -2px;
+  }
+}

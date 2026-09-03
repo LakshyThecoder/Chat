@@ -3,6 +3,8 @@ import "server-only";
 import { createAdminSupabaseClient } from "@/src/infrastructure/db/supabase/admin";
 import { evaluateFlightRefund } from "@/src/domain/eligibility/evaluate-flight-refund";
 import { normalizeSqlMoney } from "@/src/domain/money/cents";
+import { generateChamberLocator } from "@/src/domain/chamber/locator";
+import { CHAMBER_TEMPLATE } from "@/src/domain/chamber/types";
 import {
   FlyRightConflictError,
   FlyRightNotFoundError,
@@ -227,6 +229,43 @@ export class FlyRightProvider {
       throw new FlyRightNotFoundError();
     }
     return mapClaim(data);
+  }
+
+  async issueChamberTicket(): Promise<FlyRightBooking> {
+    const template = await this.getBooking(CHAMBER_TEMPLATE.locator, CHAMBER_TEMPLATE.lastName);
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const locator = generateChamberLocator();
+      const { data, error } = await this.client
+        .from("flyright_bookings")
+        .insert({
+          locator,
+          last_name: template.lastName,
+          passenger_first_name: template.passengerFirstName,
+          flight_number: template.flightNumber,
+          origin: template.origin,
+          destination: template.destination,
+          departure_at: template.departureAt,
+          fare_paid: template.farePaid,
+          currency: template.currency,
+          flight_status: template.flightStatus,
+          cancelled_by_carrier: template.cancelledByCarrier,
+          ticket_unused: template.ticketUnused,
+          issued_by: "chamber",
+        })
+        .select("*")
+        .single();
+
+      if (!error && data) {
+        return mapBooking(data);
+      }
+      if (error?.code === "23505") {
+        continue;
+      }
+      throw new Error(error?.message ?? "FlyRight could not issue a chamber ticket.");
+    }
+
+    throw new Error("FlyRight could not issue a unique chamber ticket.");
   }
 
   async requestFollowUp(claimId: string) {
