@@ -1,13 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { TheaterWebMcp } from "@/components/theater/TheaterWebMcp";
 import { runTheaterTool } from "@/components/theater/register-theater-tools";
 import {
   THEATER_STATE_EVENT,
   THEATER_WEBMCP_EVENT,
   type TheaterToolPulse,
 } from "@/components/theater/pulse";
+import {
+  THEATER_WEBMCP_STATUS_EVENT,
+  type TheaterWebMcpStatus,
+} from "@/components/theater/TheaterWebMcp";
 import { ledgerCopy } from "@/src/domain/theater/ledger";
 import type { TheaterSnapshot, TheaterWorkItemSnapshot } from "@/src/domain/theater/types";
 import { formatEuro } from "@/lib/utils";
@@ -61,17 +64,40 @@ function deskPulse(name: string) {
   ].includes(name);
 }
 
-export function ResolutionTheaterApp() {
+export function ResolutionTheaterApp({
+  webmcp: webmcpProp,
+}: {
+  webmcp?: TheaterWebMcpStatus;
+} = {}) {
   const [theater, setTheater] = useState<TheaterSnapshot | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
-  const [webmcp, setWebmcp] = useState({ ready: false, reason: "Checking WebMCP…", tools: [] as string[] });
+  const [webmcp, setWebmcp] = useState<TheaterWebMcpStatus>(
+    webmcpProp ?? { ready: false, reason: "Checking WebMCP…", tools: [] },
+  );
   const [tape, setTape] = useState<TheaterToolPulse[]>([]);
   const [copied, setCopied] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [app, setApp] = useState<OsApp>("processes");
   const [uacOpen, setUacOpen] = useState(false);
+
+  useEffect(() => {
+    if (webmcpProp) {
+      setWebmcp(webmcpProp);
+    }
+  }, [webmcpProp]);
+
+  useEffect(() => {
+    function onStatus(event: Event) {
+      const detail = (event as CustomEvent<TheaterWebMcpStatus>).detail;
+      if (detail) {
+        setWebmcp(detail);
+      }
+    }
+    window.addEventListener(THEATER_WEBMCP_STATUS_EVENT, onStatus);
+    return () => window.removeEventListener(THEATER_WEBMCP_STATUS_EVENT, onStatus);
+  }, []);
 
   const applyTheater = useCallback((next: TheaterSnapshot, focusId?: string) => {
     setTheater(next);
@@ -244,7 +270,6 @@ export function ResolutionTheaterApp() {
   if (loadError) {
     return (
       <main className="os-desktop flex min-h-screen items-center justify-center px-6 text-[#f4efe4]">
-        <TheaterWebMcp onStatus={(ready, reason, tools) => setWebmcp({ ready, reason, tools })} />
         <div className="os-window max-w-lg border border-[#e8b84a]/40 bg-[#0b1f3a] p-8">
           <p className="font-board text-sm tracking-[0.28em] text-[#e8b84a]">SESSION FAILED</p>
           <p className="mt-4 text-lg" role="alert">
@@ -253,6 +278,7 @@ export function ResolutionTheaterApp() {
           <p className="mt-3 text-sm text-white/60">
             Needs theater tables, FlyRight FR1842, Streamly SL-1001, and blocked FR0999 claim.
           </p>
+          <p className="mt-2 font-mono text-[11px] text-white/40">{webmcp.reason}</p>
           <button
             type="button"
             className="theater-btn mt-6 border border-[#e8b84a] px-4 py-2 text-sm text-[#e8b84a]"
@@ -268,8 +294,10 @@ export function ResolutionTheaterApp() {
   if (!theater) {
     return (
       <main className="os-desktop flex min-h-screen items-center justify-center text-[#e8b84a]" aria-busy="true">
-        <TheaterWebMcp onStatus={(ready, reason, tools) => setWebmcp({ ready, reason, tools })} />
-        <p className="font-board tracking-[0.32em]">MOUNTING SESSION…</p>
+        <div className="text-center">
+          <p className="font-board tracking-[0.32em]">MOUNTING SESSION…</p>
+          <p className="mt-3 font-mono text-[11px] text-white/45">{webmcp.reason}</p>
+        </div>
       </main>
     );
   }
@@ -297,9 +325,7 @@ export function ResolutionTheaterApp() {
 
   return (
     <main className="os-desktop flex min-h-screen flex-col text-[#f4efe4]" aria-busy={Boolean(pending)}>
-      <TheaterWebMcp onStatus={(ready, reason, tools) => setWebmcp({ ready, reason, tools })} />
-
-      <header className="border-b border-[#e8b84a]/25 bg-[#050d18]/95 px-3 py-2 sm:px-5">
+      <header className="border-b border-[#e8b84a]/25 bg-[#050d18]/95 px-3 py-2 sm:px-5" data-agent-target="menubar">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <p className="font-board text-sm tracking-[0.28em] text-[#e8b84a]">AEGIS OS</p>
@@ -309,6 +335,15 @@ export function ResolutionTheaterApp() {
             <span className={webmcp.ready ? "text-[#9dffa1]" : "text-[#ffb4a8]"} role="status" aria-live="polite">
               {webmcp.ready ? "WEBMCP ONLINE" : "WEBMCP OFF"}
             </span>
+            {!webmcp.ready ? (
+              <button
+                type="button"
+                className="theater-btn text-[#e8b84a] underline-offset-2 hover:underline"
+                onClick={() => window.dispatchEvent(new Event("focus"))}
+              >
+                Rebind
+              </button>
+            ) : null}
             <span className="text-white/30">|</span>
             <span className="text-white/55">{awaiting.length} UAC</span>
             <span className="text-white/30">|</span>
@@ -352,6 +387,7 @@ export function ResolutionTheaterApp() {
           active={app === "processes"}
           pulse={paperPulse}
           tone="paper"
+          agentTarget="processes"
           className={`bg-[#ede6d6] text-[#1a1714] ${app === "processes" ? "" : "hidden lg:flex"}`}
           onFocus={() => setApp("processes")}
         >
@@ -415,6 +451,7 @@ export function ResolutionTheaterApp() {
           title="Inspector · Provider row"
           active={app === "inspector"}
           pulse={counterPulse}
+          agentTarget="inspector"
           className={`border border-[#e8b84a]/20 bg-[#0b1f3a] ${app === "inspector" ? "" : "hidden lg:flex"}`}
           onFocus={() => setApp("inspector")}
         >
@@ -500,6 +537,7 @@ export function ResolutionTheaterApp() {
         <WindowFrame
           title="System Console · Agent ledger"
           active={app === "console"}
+          agentTarget="console"
           className={`border border-[#e8b84a]/20 bg-[#050d18] lg:col-span-2 ${
             app === "console" ? "" : "hidden lg:flex"
           }`}
@@ -604,6 +642,7 @@ export function ResolutionTheaterApp() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="uac-title"
+            data-agent-target="uac"
             className="os-window max-h-[85vh] w-full max-w-lg overflow-auto border border-[#e8b84a]/50 bg-[#ede6d6] text-[#1a1714]"
           >
             <div className="os-titlebar flex items-center justify-between border-b border-[#1a1714]/15 bg-[#d9d0bc] px-4 py-3">
@@ -668,6 +707,7 @@ function WindowFrame({
   active,
   pulse,
   tone = "ink",
+  agentTarget,
   onFocus,
 }: {
   title: string;
@@ -676,10 +716,12 @@ function WindowFrame({
   active?: boolean;
   pulse?: boolean;
   tone?: "ink" | "paper";
+  agentTarget?: string;
   onFocus?: () => void;
 }) {
   return (
     <section
+      data-agent-target={agentTarget}
       className={`os-window flex min-h-0 flex-col overflow-hidden ${active ? "ring-1 ring-[#e8b84a]/50" : ""} ${
         pulse ? "chamber-pulse-desk" : ""
       } ${className ?? ""}`}

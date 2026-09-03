@@ -70,7 +70,7 @@
 
 .os-boot-fill {
   width: 40%;
-  animation: os-boot-scan 1.1s ease-in-out infinite;
+  animation: os-boot-scan 0.45s ease-in-out infinite;
 }
 
 @keyframes os-boot-scan {
@@ -80,6 +80,15 @@
   100% {
     transform: translateX(320%);
   }
+}
+
+.agent-cursor {
+  will-change: left, top;
+}
+
+.agent-cursor-trail {
+  will-change: left, top, opacity;
+  pointer-events: none;
 }
 
 .os-uac-scrim {
