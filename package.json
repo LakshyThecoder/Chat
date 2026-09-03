@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:theater": "vitest run tests/integration/theater-demo.integration.test.ts",
+    "test:mail": "vitest run tests/integration/mail-desk.integration.test.ts",
     "preflight": "npm run typecheck && npm run lint && npm run test"
   },
   "dependencies": {

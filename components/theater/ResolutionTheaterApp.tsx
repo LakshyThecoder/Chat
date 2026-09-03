@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { runTheaterTool } from "@/components/theater/register-theater-tools";
+import { MailDisputesPanel } from "@/components/theater/MailDisputesPanel";
 import {
   THEATER_STATE_EVENT,
   THEATER_WEBMCP_EVENT,
@@ -15,7 +16,7 @@ import { ledgerCopy } from "@/src/domain/theater/ledger";
 import type { TheaterSnapshot, TheaterWorkItemSnapshot } from "@/src/domain/theater/types";
 import { formatEuro } from "@/lib/utils";
 
-type OsApp = "processes" | "inspector" | "console" | "about";
+type OsApp = "processes" | "inspector" | "console" | "mail" | "about";
 
 function agentPrompt() {
   return "Go ahead.";
@@ -49,6 +50,7 @@ const PIPELINE = [
 const APPS: Array<{ id: OsApp; label: string; short: string }> = [
   { id: "processes", label: "Task Manager", short: "Tasks" },
   { id: "inspector", label: "Inspector", short: "Inspect" },
+  { id: "mail", label: "Mail Disputes", short: "Mail" },
   { id: "console", label: "Console", short: "Console" },
   { id: "about", label: "About OS", short: "About" },
 ];
@@ -159,6 +161,16 @@ export function ResolutionTheaterApp({
         if (detail.name === "begin_resolution" && detail.ok) {
           setUacOpen(true);
           setApp("processes");
+        }
+        if (
+          detail.name.startsWith("mail") ||
+          detail.name.includes("mail") ||
+          detail.name === "begin_mail_resolution" ||
+          detail.name === "import_bill" ||
+          detail.name === "send_support_email" ||
+          detail.name === "verify_sent"
+        ) {
+          setApp("mail");
         }
         if (detail.name === "continue_resolution" || detail.name === "verify_filing") {
           setApp("inspector");
@@ -365,8 +377,8 @@ export function ResolutionTheaterApp({
           <p className="text-sm leading-snug">
             <span className="font-board text-[11px] tracking-[0.2em]">COMMAND</span>
             <span className="ml-2">
-              Say <span className="font-mono font-semibold">“{prompt}”</span> then{" "}
-              <span className="font-mono font-semibold">“Continue.”</span> after you sign.
+              Say <span className="font-mono font-semibold">“{prompt}”</span> for provider filings, or{" "}
+              <span className="font-mono font-semibold">“Check my email for CodeForge and prepare a refund.”</span>
             </span>
           </p>
           <button
@@ -532,6 +544,18 @@ export function ResolutionTheaterApp({
             ) : null}
             <p className="font-mono text-[11px] text-white/40">{webmcp.reason}</p>
           </div>
+        </WindowFrame>
+
+        <WindowFrame
+          title="Mail Disputes · Sandbox mailbox"
+          active={app === "mail"}
+          agentTarget="mail"
+          className={`border border-[#e8b84a]/20 bg-[#0b1f3a] lg:col-span-2 ${
+            app === "mail" ? "flex min-h-[28rem]" : "hidden"
+          }`}
+          onFocus={() => setApp("mail")}
+        >
+          <MailDisputesPanel active={app === "mail"} />
         </WindowFrame>
 
         <WindowFrame

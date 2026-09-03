@@ -6,6 +6,17 @@ import { THEATER_WEBMCP_EVENT, type TheaterToolPulse } from "@/components/theate
 type Pos = { x: number; y: number };
 
 function targetForTool(name: string): string {
+  if (
+    name.includes("mail") ||
+    name === "import_bill" ||
+    name === "lookup_refund_policy" ||
+    name === "prepare_support_email" ||
+    name === "send_support_email" ||
+    name === "verify_sent" ||
+    name === "begin_mail_resolution"
+  ) {
+    return '[data-agent-target="mail"]';
+  }
   if (name.includes("signature") || name === "begin_resolution" || name === "request_signature") {
     return '[data-agent-target="uac"], [data-agent-target="processes"]';
   }

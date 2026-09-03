@@ -6,7 +6,9 @@ import {
   runTheaterTool,
   theaterToolsHealthy,
 } from "@/components/theater/register-theater-tools";
+import { registerMailDeskTools, runMailDeskTool } from "@/components/theater/register-mail-desk-tools";
 import type { TheaterToolName } from "@/src/domain/theater/tools";
+import type { MailDeskToolName } from "@/src/domain/mail-desk/tools";
 import { useEffect, useRef, useState } from "react";
 
 export const THEATER_WEBMCP_STATUS_EVENT = "aegis:theater:webmcp-status";
@@ -37,12 +39,17 @@ function bindNow(onStatus: (status: TheaterWebMcpStatus) => void): boolean {
     }
 
     const names = registerTheaterTools(context, (name: TheaterToolName, input) => runTheaterTool(name, input));
-    // After a successful registerTool pass, treat tools as live even if getTools() is a weird host shape.
+    const mailNames = registerMailDeskTools(context, (name: MailDeskToolName, input) =>
+      runMailDeskTool(name, input),
+    );
+    // Prefer creating a mail desk session so ChatGPT tools have a cookie immediately.
+    void fetch("/api/demo/mail/session", { method: "POST" }).catch(() => undefined);
     const discovered = discoverRegisteredToolNames(context);
+    const catalogCount = names.length + mailNames.length;
     const status = {
       ready: true,
-      reason: `WebMCP online · ${discovered.length || names.length} tools live on this desktop.`,
-      tools: discovered.length > 0 ? discovered : names,
+      reason: `WebMCP online · ${discovered.length > 0 ? discovered.length : catalogCount} tools live on this desktop.`,
+      tools: discovered.length > 0 ? discovered : [...names, ...mailNames],
     };
     onStatus(status);
     publishStatus(status);

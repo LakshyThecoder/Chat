@@ -10,8 +10,11 @@ export function ledgerCopy(input: {
   if (!input.ok) {
     if (input.code === "APPROVAL_REQUIRED") {
       return {
-        headline: "Filing blocked — human signature required",
-        detail: "execute_filing refused because this page has not signed the prepared amount.",
+        headline: "Blocked — human signature required",
+        detail:
+          name.includes("send") || name.includes("mail")
+            ? "send_support_email refused until this page signs the refund amount."
+            : "execute_filing refused because this page has not signed the prepared amount.",
       };
     }
     if (input.code === "NOT_ELIGIBLE") {
@@ -58,6 +61,27 @@ export function ledgerCopy(input: {
         headline: "Signed filings executed and verified",
         detail: "Only APPROVED items filed. Success requires matched verify_filing.",
       };
+    case "begin_mail_resolution":
+      return {
+        headline: "Mailbox scanned — signatures required",
+        detail: "Bills imported and support emails drafted. Agent will not send yet.",
+      };
+    case "list_mail_disputes":
+      return { headline: "Agent listed mail disputes", detail: "Sandbox mailbox states." };
+    case "inspect_mail":
+      return { headline: "Agent opened a mail dispute", detail: "Message painted on Mail Disputes." };
+    case "import_bill":
+      return { headline: "Bill imported from mailbox", detail: "Amount comes from the invoice, not the model." };
+    case "lookup_refund_policy":
+      return { headline: "Refund policy loaded", detail: "Provenance attached. Software owns eligibility." };
+    case "prepare_support_email":
+      return { headline: "Support email drafted", detail: "Ready for human signature. Not sent." };
+    case "request_mail_signature":
+      return { headline: "Outbound UAC required", detail: "Sign the refund amount before send." };
+    case "send_support_email":
+      return { headline: "Support email sent", detail: "Do not call this done until verify_sent matches." };
+    case "verify_sent":
+      return { headline: "Outbound mail re-read", detail: "Expected vs observed must match." };
     default:
       return { headline: name, detail: "Tool wrote into this page." };
   }
