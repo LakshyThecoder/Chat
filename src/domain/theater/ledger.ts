@@ -48,6 +48,16 @@ export function ledgerCopy(input: {
       return { headline: "Agent filed at the provider", detail: "Do not call this done until verify_filing matches." };
     case "verify_filing":
       return { headline: "Provider row re-read", detail: "Expected vs observed must match." };
+    case "begin_resolution":
+      return {
+        headline: "Resolution started — signatures required",
+        detail: "Eligible disputes prepared. Blocked bookings left alone. Agent will not file yet.",
+      };
+    case "continue_resolution":
+      return {
+        headline: "Signed filings executed and verified",
+        detail: "Only APPROVED items filed. Success requires matched verify_filing.",
+      };
     default:
       return { headline: name, detail: "Tool wrote into this page." };
   }

@@ -7,8 +7,10 @@ import {
 import { TheaterSessionError } from "@/src/domain/theater/errors";
 
 describe("theater WebMCP contract", () => {
-  it("registers eight typed tools with schemas and side effects", () => {
+  it("registers ten typed tools with schemas and side effects", () => {
     expect(THEATER_TOOLS.map((tool) => tool.name)).toEqual([
+      "begin_resolution",
+      "continue_resolution",
       "list_work_items",
       "get_work_item",
       "inspect_counter",
@@ -26,8 +28,14 @@ describe("theater WebMCP contract", () => {
   });
 
   it("keeps execute human-gated and verify fail-closed in the contract copy", () => {
+    const begin = THEATER_TOOLS.find((tool) => tool.name === "begin_resolution");
+    const cont = THEATER_TOOLS.find((tool) => tool.name === "continue_resolution");
     const execute = THEATER_TOOLS.find((tool) => tool.name === "execute_filing");
     const verify = THEATER_TOOLS.find((tool) => tool.name === "verify_filing");
+    expect(begin?.sideEffect).toBe("orchestrate");
+    expect(begin?.description).toMatch(/Never files/i);
+    expect(cont?.sideEffect).toBe("orchestrate");
+    expect(cont?.description).toMatch(/APPROVAL_REQUIRED/);
     expect(execute?.description).toMatch(/APPROVAL_REQUIRED/);
     expect(execute?.sideEffect).toBe("mutate");
     expect(execute?.idempotent).toBe(true);

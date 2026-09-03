@@ -606,6 +606,159 @@ export async function executeTheaterTool(params: {
   const workItemId = definition.requiresWorkItemId ? parseWorkItemId(input) : "";
 
   switch (tool) {
+    case "begin_resolution": {
+      const prepared: string[] = [];
+      const awaitingSignature: string[] = [];
+      const skippedBlocked: Array<{ id: string; reason: string }> = [];
+      const skippedIneligible: Array<{ id: string; reason: string }> = [];
+
+      let snapshot = await snapshotFrom(session);
+      for (const item of snapshot.items) {
+        if (item.catalogBlocked) {
+          skippedBlocked.push({ id: item.id, reason: item.problem });
+          continue;
+        }
+        if (
+          item.status === "AWAITING_SIGNATURE" ||
+          item.status === "APPROVED" ||
+          item.status === "EXECUTED" ||
+          item.status === "VERIFIED"
+        ) {
+          if (item.status === "AWAITING_SIGNATURE") {
+            awaitingSignature.push(item.id);
+          }
+          continue;
+        }
+        if (item.status === "DENIED") {
+          continue;
+        }
+
+        try {
+          await executeTheaterTool({ token: params.token, tool: "inspect_counter", input: { workItemId: item.id } });
+          await executeTheaterTool({ token: params.token, tool: "compute_entitlement", input: { workItemId: item.id } });
+          await executeTheaterTool({ token: params.token, tool: "prepare_filing", input: { workItemId: item.id } });
+          await executeTheaterTool({ token: params.token, tool: "request_signature", input: { workItemId: item.id } });
+          prepared.push(item.id);
+          awaitingSignature.push(item.id);
+        } catch (error) {
+          if (error instanceof TheaterSessionError && error.code === "NOT_ELIGIBLE") {
+            skippedIneligible.push({ id: item.id, reason: error.message });
+            continue;
+          }
+          throw error;
+        }
+      }
+
+      snapshot = await snapshotFrom(session);
+      await recordAudit({
+        sessionId: session.id,
+        eventType: "begin_resolution",
+        payload: {
+          prepared,
+          awaitingSignature,
+          skippedBlocked: skippedBlocked.map((entry) => entry.id),
+        },
+      });
+
+      return {
+        result: envelope({
+          tool,
+          snapshot,
+          extra: {
+            prepared,
+            awaitingSignature,
+            skippedBlocked,
+            skippedIneligible,
+            humanActionRequired: awaitingSignature.length > 0,
+            nextHumanStep:
+              awaitingSignature.length > 0
+                ? "Sign the prepared amounts on this page. Then call continue_resolution."
+                : "Nothing awaiting signature.",
+          },
+        }),
+        snapshot,
+      };
+    }
+    case "continue_resolution": {
+      const verified: string[] = [];
+      const failed: Array<{ id: string; reason: string }> = [];
+      const stillAwaitingSignature: string[] = [];
+
+      let snapshot = await snapshotFrom(session);
+      for (const item of snapshot.items) {
+        if (item.catalogBlocked) {
+          continue;
+        }
+        if (item.status === "VERIFIED") {
+          verified.push(item.id);
+          continue;
+        }
+        if (item.status === "AWAITING_SIGNATURE" || item.status === "PREPARED" || item.status === "ENTITLED") {
+          stillAwaitingSignature.push(item.id);
+          continue;
+        }
+        if (item.status !== "APPROVED" && item.status !== "EXECUTED" && item.status !== "FAILED") {
+          continue;
+        }
+
+        try {
+          if (item.status === "APPROVED" || (item.status === "FAILED" && !item.lastMutationId)) {
+            await executeTheaterTool({
+              token: params.token,
+              tool: "execute_filing",
+              input: { workItemId: item.id },
+            });
+          }
+          const verifiedResult = await executeTheaterTool({
+            token: params.token,
+            tool: "verify_filing",
+            input: { workItemId: item.id },
+          });
+          const matched = (verifiedResult.result.verification as { matched?: boolean } | undefined)?.matched;
+          if (matched) {
+            verified.push(item.id);
+          } else {
+            failed.push({ id: item.id, reason: "Verification mismatch." });
+          }
+        } catch (error) {
+          if (error instanceof TheaterPermissionError && error.code === "APPROVAL_REQUIRED") {
+            stillAwaitingSignature.push(item.id);
+            continue;
+          }
+          failed.push({
+            id: item.id,
+            reason: error instanceof Error ? error.message : "continue_resolution failed",
+          });
+        }
+      }
+
+      snapshot = await snapshotFrom(session);
+      await recordAudit({
+        sessionId: session.id,
+        eventType: "continue_resolution",
+        payload: { verified, failed: failed.map((entry) => entry.id), stillAwaitingSignature },
+      });
+
+      return {
+        result: envelope({
+          tool,
+          snapshot,
+          extra: {
+            verified,
+            failed,
+            stillAwaitingSignature,
+            humanActionRequired: stillAwaitingSignature.length > 0,
+            nextHumanStep:
+              stillAwaitingSignature.length > 0
+                ? "Sign remaining amounts on this page, then call continue_resolution again."
+                : failed.length > 0
+                  ? "Some filings failed verification. Do not declare success."
+                  : "All signed filings verified.",
+          },
+        }),
+        snapshot,
+      };
+    }
     case "list_work_items": {
       const snapshot = await snapshotFrom(session);
       return {

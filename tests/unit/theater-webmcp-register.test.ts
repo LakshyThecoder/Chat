@@ -28,8 +28,13 @@ describe("theater ledger and registration", () => {
     };
     const first = registerTheaterTools(context, async () => ({}));
     const second = registerTheaterTools(context, async () => ({}));
-    expect(first).toHaveLength(8);
-    expect(second).toHaveLength(8);
-    expect(registered).toHaveLength(8);
+    expect(first).toHaveLength(10);
+    expect(second).toHaveLength(10);
+    expect(registered).toHaveLength(10);
+  });
+
+  it("explains orchestration tools in plain language", () => {
+    expect(ledgerCopy({ name: "begin_resolution", ok: true }).headline).toMatch(/signatures required/i);
+    expect(ledgerCopy({ name: "continue_resolution", ok: true }).headline).toMatch(/verified/i);
   });
 });

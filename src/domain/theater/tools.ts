@@ -10,11 +10,13 @@ export const THEATER_TOOL_NAMES = [
   "request_signature",
   "execute_filing",
   "verify_filing",
+  "begin_resolution",
+  "continue_resolution",
 ] as const;
 
 export type TheaterToolName = (typeof THEATER_TOOL_NAMES)[number];
 
-export type TheaterToolSideEffect = "read" | "compute" | "prepare" | "mutate" | "verify";
+export type TheaterToolSideEffect = "read" | "compute" | "prepare" | "mutate" | "verify" | "orchestrate";
 
 export interface TheaterToolDefinition {
   name: TheaterToolName;
@@ -45,9 +47,29 @@ const noInputSchema = {
 
 export const THEATER_TOOLS: TheaterToolDefinition[] = [
   {
+    name: "begin_resolution",
+    description:
+      "Primary entry when the human says go ahead. Inspects, computes entitlement, prepares filings, and requests signatures for every eligible dispute on this desk. Never files. Never touches the already-claimed FR0999 / BERG booking. Stops for human signature — then call continue_resolution.",
+    sideEffect: "orchestrate",
+    authorization: "session-cookie",
+    idempotent: true,
+    requiresWorkItemId: false,
+    inputSchema: noInputSchema,
+  },
+  {
+    name: "continue_resolution",
+    description:
+      "After the human signs prepared amounts on this page: execute_filing and verify_filing for each approved dispute. Refuses unsigned items with APPROVAL_REQUIRED. Success only when verify_filing matched=true. Leaves blocked bookings alone.",
+    sideEffect: "orchestrate",
+    authorization: "session-cookie",
+    idempotent: true,
+    requiresWorkItemId: false,
+    inputSchema: noInputSchema,
+  },
+  {
     name: "list_work_items",
     description:
-      "List the three disputes on this desk and their live states. Use this first. The FR0999 / BERG booking is already claimed and must not be filed.",
+      "List the three disputes on this desk and their live states. The FR0999 / BERG booking is already claimed and must not be filed.",
     sideEffect: "read",
     authorization: "session-cookie",
     idempotent: true,

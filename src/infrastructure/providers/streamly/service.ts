@@ -199,6 +199,10 @@ export class StreamlyProvider {
     const compensation = await this.calculateRefund(params.subscriptionId, params.accountEmail);
 
     if (compensation.outcome !== "eligible" || !compensation.amount) {
+      const existingRefund = await this.getRefundForSubscription(params.subscriptionId);
+      if (existingRefund && existingRefund.idempotencyKey === params.idempotencyKey) {
+        return existingRefund;
+      }
       throw new StreamlyConflictError(
         compensation.reasons[0] ?? "Subscription is not eligible for a billed-after-cancel refund.",
       );

@@ -144,18 +144,29 @@ describeIf("resolution theater (integration)", () => {
   });
 
   it("verification mismatch fails closed and concurrent execute shares one mutation", async () => {
-    if (!token) throw new Error("missing token");
-    const snapshot = await getTheaterSnapshot(token);
-    const item = snapshot.items.find((it) => it.providerId === "streamly");
+    const created = await createTheaterSession();
+    const mismatchToken = created.token;
+    cleanup.sessionIds.push(created.snapshot.sessionId);
+    const item = created.snapshot.items.find((it) => it.providerId === "streamly");
     expect(item).toBeTruthy();
     if (!item) return;
+    if (item.identity.providerId === "streamly") {
+      cleanup.streamlySubscriptionIds.push(item.identity.subscriptionId);
+    }
+    const flyItem = created.snapshot.items.find((it) => it.providerId === "flyright" && !it.catalogBlocked);
+    if (flyItem?.identity.providerId === "flyright") {
+      cleanup.flyrightLocators.push(flyItem.identity.locator);
+    }
 
-    await prepare(item.id);
-    await decideTheaterWorkItem({ token, workItemId: item.id, decision: "approved" });
+    await executeTheaterTool({ token: mismatchToken, tool: "inspect_counter", input: { workItemId: item.id } });
+    await executeTheaterTool({ token: mismatchToken, tool: "compute_entitlement", input: { workItemId: item.id } });
+    await executeTheaterTool({ token: mismatchToken, tool: "prepare_filing", input: { workItemId: item.id } });
+    await executeTheaterTool({ token: mismatchToken, tool: "request_signature", input: { workItemId: item.id } });
+    await decideTheaterWorkItem({ token: mismatchToken, workItemId: item.id, decision: "approved" });
 
     const [first, second] = await Promise.all([
-      executeTheaterTool({ token, tool: "execute_filing", input: { workItemId: item.id } }),
-      executeTheaterTool({ token, tool: "execute_filing", input: { workItemId: item.id } }),
+      executeTheaterTool({ token: mismatchToken, tool: "execute_filing", input: { workItemId: item.id } }),
+      executeTheaterTool({ token: mismatchToken, tool: "execute_filing", input: { workItemId: item.id } }),
     ]);
     const firstId = (first.result.mutation as { id: string }).id;
     const secondId = (second.result.mutation as { id: string }).id;
@@ -164,13 +175,21 @@ describeIf("resolution theater (integration)", () => {
     const client = createAdminSupabaseClient();
     await client.from("streamly_refunds").update({ amount: "0.01" }).eq("id", firstId);
 
-    const verified = await executeTheaterTool({ token, tool: "verify_filing", input: { workItemId: item.id } });
+    const verified = await executeTheaterTool({
+      token: mismatchToken,
+      tool: "verify_filing",
+      input: { workItemId: item.id },
+    });
     expect((verified.result.verification as { matched: boolean }).matched).toBe(false);
 
-    const after = await getTheaterSnapshot(token);
+    const after = await getTheaterSnapshot(mismatchToken);
     expect(after.items.find((it) => it.id === item.id)?.status).toBe("FAILED");
 
-    const retried = await executeTheaterTool({ token, tool: "verify_filing", input: { workItemId: item.id } });
+    const retried = await executeTheaterTool({
+      token: mismatchToken,
+      tool: "verify_filing",
+      input: { workItemId: item.id },
+    });
     expect((retried.result.verification as { matched: boolean }).matched).toBe(false);
   });
 
@@ -206,6 +225,80 @@ describeIf("resolution theater (integration)", () => {
       executeTheaterTool({ token, tool: "prepare_filing", input: { workItemId: blocked.id } }),
     ).rejects.toMatchObject({ code: "NOT_ELIGIBLE" });
   });
+
+  it(
+    "begin_resolution → sign → continue_resolution verifies without filing unsigned",
+    async () => {
+    const created = await createTheaterSession();
+    const orchToken = created.token;
+    cleanup.sessionIds.push(created.snapshot.sessionId);
+    const flyItem = created.snapshot.items.find((item) => item.providerId === "flyright" && !item.catalogBlocked);
+    const streamItem = created.snapshot.items.find((item) => item.providerId === "streamly");
+    const blockedItem = created.snapshot.items.find((item) => item.catalogBlocked);
+    if (!flyItem || !streamItem || !blockedItem) {
+      throw new Error("Theater session did not issue flyright, streamly, and blocked items.");
+    }
+    if (flyItem.identity.providerId === "flyright") {
+      cleanup.flyrightLocators.push(flyItem.identity.locator);
+    }
+    if (streamItem.identity.providerId === "streamly") {
+      cleanup.streamlySubscriptionIds.push(streamItem.identity.subscriptionId);
+    }
+
+    const begun = await executeTheaterTool({ token: orchToken, tool: "begin_resolution", input: {} });
+    const beginExtra = begun.result as {
+      prepared?: string[];
+      awaitingSignature?: string[];
+      skippedBlocked?: Array<{ id: string }>;
+      humanActionRequired?: boolean;
+    };
+    expect(beginExtra.humanActionRequired).toBe(true);
+    expect(beginExtra.prepared).toEqual(expect.arrayContaining([flyItem.id, streamItem.id]));
+    expect(beginExtra.skippedBlocked?.map((entry) => entry.id)).toContain(blockedItem.id);
+
+    const afterBegin = await getTheaterSnapshot(orchToken);
+    expect(afterBegin.items.find((item) => item.id === flyItem.id)?.status).toBe("AWAITING_SIGNATURE");
+    expect(afterBegin.items.find((item) => item.id === streamItem.id)?.status).toBe("AWAITING_SIGNATURE");
+    expect(afterBegin.items.find((item) => item.id === blockedItem.id)?.catalogBlocked).toBe(true);
+
+    const unsignedContinue = await executeTheaterTool({
+      token: orchToken,
+      tool: "continue_resolution",
+      input: {},
+    });
+    const unsignedExtra = unsignedContinue.result as {
+      stillAwaitingSignature?: string[];
+      verified?: string[];
+    };
+    expect(unsignedExtra.stillAwaitingSignature).toEqual(
+      expect.arrayContaining([flyItem.id, streamItem.id]),
+    );
+    expect(unsignedExtra.verified ?? []).toHaveLength(0);
+
+    await decideTheaterWorkItem({ token: orchToken, workItemId: flyItem.id, decision: "approved" });
+    await decideTheaterWorkItem({ token: orchToken, workItemId: streamItem.id, decision: "approved" });
+
+    const continued = await executeTheaterTool({
+      token: orchToken,
+      tool: "continue_resolution",
+      input: {},
+    });
+    const continueExtra = continued.result as {
+      verified?: string[];
+      stillAwaitingSignature?: string[];
+      failed?: Array<{ id: string }>;
+    };
+    expect(continueExtra.verified).toEqual(expect.arrayContaining([flyItem.id, streamItem.id]));
+    expect(continueExtra.stillAwaitingSignature ?? []).toHaveLength(0);
+    expect(continueExtra.failed ?? []).toHaveLength(0);
+
+    const finalSnap = await getTheaterSnapshot(orchToken);
+    expect(finalSnap.items.find((item) => item.id === flyItem.id)?.status).toBe("VERIFIED");
+    expect(finalSnap.items.find((item) => item.id === streamItem.id)?.status).toBe("VERIFIED");
+    expect(finalSnap.items.find((item) => item.id === blockedItem.id)?.status).not.toBe("VERIFIED");
+  },
+    30_000,
+  );
 
   it("denies a filing and rejects malformed ids", async () => {
     if (!token) throw new Error("missing token");
