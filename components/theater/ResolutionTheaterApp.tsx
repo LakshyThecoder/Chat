@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { TheaterWebMcp } from "@/components/theater/TheaterWebMcp";
 import { runTheaterTool } from "@/components/theater/register-theater-tools";
 import {
@@ -12,13 +12,18 @@ import { ledgerCopy } from "@/src/domain/theater/ledger";
 import type { TheaterSnapshot, TheaterWorkItemSnapshot } from "@/src/domain/theater/types";
 import { formatEuro } from "@/lib/utils";
 
+type OsApp = "processes" | "inspector" | "console" | "about";
+
 function agentPrompt() {
   return "Go ahead.";
 }
 
 async function fetchSession(method: "GET" | "POST") {
   const response = await fetch("/api/demo/theater/session", { method });
-  const payload = (await response.json()) as { theater?: TheaterSnapshot; error?: { message?: string; code?: string } };
+  const payload = (await response.json()) as {
+    theater?: TheaterSnapshot;
+    error?: { message?: string; code?: string };
+  };
   if (!response.ok || !payload.theater) {
     throw Object.assign(new Error(payload.error?.message ?? "Could not open the desk."), {
       code: payload.error?.code,
@@ -37,6 +42,13 @@ const PIPELINE = [
   "EXECUTED",
   "VERIFIED",
 ] as const;
+
+const APPS: Array<{ id: OsApp; label: string; short: string }> = [
+  { id: "processes", label: "Task Manager", short: "Tasks" },
+  { id: "inspector", label: "Inspector", short: "Inspect" },
+  { id: "console", label: "Console", short: "Console" },
+  { id: "about", label: "About OS", short: "About" },
+];
 
 function deskPulse(name: string) {
   return [
@@ -58,10 +70,16 @@ export function ResolutionTheaterApp() {
   const [copied, setCopied] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [app, setApp] = useState<OsApp>("processes");
+  const [uacOpen, setUacOpen] = useState(false);
 
   const applyTheater = useCallback((next: TheaterSnapshot, focusId?: string) => {
     setTheater(next);
     setSelectedId((current) => focusId ?? current ?? next.items[0]?.id ?? null);
+    const waiting = next.items.some((item) => item.status === "AWAITING_SIGNATURE");
+    if (waiting) {
+      setUacOpen(true);
+    }
   }, []);
 
   async function openSession(reset = false) {
@@ -105,13 +123,22 @@ export function ResolutionTheaterApp() {
     function onPulse(event: Event) {
       const detail = (event as CustomEvent<TheaterToolPulse>).detail;
       if (detail) {
-        setTape((current) => [detail, ...current].slice(0, 18));
-        const focus = detail.input && typeof detail.input.workItemId === "string" ? detail.input.workItemId : undefined;
+        setTape((current) => [detail, ...current].slice(0, 24));
+        const focus =
+          detail.input && typeof detail.input.workItemId === "string" ? detail.input.workItemId : undefined;
         if (focus) {
           setSelectedId(focus);
+          setApp("inspector");
         }
-        if (typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches) {
-          document.getElementById("counter")?.scrollIntoView({ block: "start", behavior: "smooth" });
+        if (detail.name === "begin_resolution" && detail.ok) {
+          setUacOpen(true);
+          setApp("processes");
+        }
+        if (detail.name === "continue_resolution" || detail.name === "verify_filing") {
+          setApp("inspector");
+        }
+        if (!detail.ok && detail.code === "APPROVAL_REQUIRED") {
+          setUacOpen(true);
         }
       }
     }
@@ -127,9 +154,13 @@ export function ResolutionTheaterApp() {
   const lastTool = tape[0];
 
   async function copyPrompt() {
-    await navigator.clipboard.writeText(prompt);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setActionError("Clipboard blocked — type Go ahead. in ChatGPT.");
+    }
   }
 
   async function decide(workItemId: string, decision: "approved" | "denied") {
@@ -146,6 +177,11 @@ export function ResolutionTheaterApp() {
         throw new Error(payload.error?.message ?? "Signature decision failed.");
       }
       applyTheater(payload.theater, workItemId);
+      const stillWaiting = payload.theater.items.some((item) => item.status === "AWAITING_SIGNATURE");
+      if (!stillWaiting) {
+        setUacOpen(false);
+        setApp("inspector");
+      }
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Signature decision failed.");
     } finally {
@@ -183,6 +219,8 @@ export function ResolutionTheaterApp() {
     setActionError(null);
     try {
       await runTheaterTool("begin_resolution", {});
+      setUacOpen(true);
+      setApp("processes");
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Begin resolution failed.");
     } finally {
@@ -195,6 +233,7 @@ export function ResolutionTheaterApp() {
     setActionError(null);
     try {
       await runTheaterTool("continue_resolution", {});
+      setApp("inspector");
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Continue resolution failed.");
     } finally {
@@ -204,22 +243,22 @@ export function ResolutionTheaterApp() {
 
   if (loadError) {
     return (
-      <main className="chamber-root flex min-h-screen items-center justify-center px-6">
-        <div className="max-w-lg border border-[#e8b84a]/40 bg-[#0b1f3a] p-8 text-[#f4efe4]">
-          <p className="font-board text-sm tracking-[0.28em] text-[#e8b84a]">DESK CLOSED</p>
+      <main className="os-desktop flex min-h-screen items-center justify-center px-6 text-[#f4efe4]">
+        <TheaterWebMcp onStatus={(ready, reason, tools) => setWebmcp({ ready, reason, tools })} />
+        <div className="os-window max-w-lg border border-[#e8b84a]/40 bg-[#0b1f3a] p-8">
+          <p className="font-board text-sm tracking-[0.28em] text-[#e8b84a]">SESSION FAILED</p>
           <p className="mt-4 text-lg" role="alert">
             {loadError}
           </p>
           <p className="mt-3 text-sm text-white/60">
-            The live demo needs the theater tables, FlyRight template FR1842, Streamly template SL-1001, and the FR0999
-            already-claimed row.
+            Needs theater tables, FlyRight FR1842, Streamly SL-1001, and blocked FR0999 claim.
           </p>
           <button
             type="button"
             className="theater-btn mt-6 border border-[#e8b84a] px-4 py-2 text-sm text-[#e8b84a]"
             onClick={() => void openSession(true)}
           >
-            Try again
+            Retry boot
           </button>
         </div>
       </main>
@@ -228,14 +267,9 @@ export function ResolutionTheaterApp() {
 
   if (!theater) {
     return (
-      <main className="chamber-root flex min-h-screen items-center justify-center text-[#e8b84a]" aria-busy="true">
-        <div className="w-full max-w-6xl px-6">
-          <p className="font-board tracking-[0.32em]">OPENING DESK…</p>
-          <div className="mt-8 grid gap-4 lg:grid-cols-2">
-            <div className="h-64 bg-[#ede6d6]/20" />
-            <div className="h-64 border border-[#e8b84a]/20" />
-          </div>
-        </div>
+      <main className="os-desktop flex min-h-screen items-center justify-center text-[#e8b84a]" aria-busy="true">
+        <TheaterWebMcp onStatus={(ready, reason, tools) => setWebmcp({ ready, reason, tools })} />
+        <p className="font-board tracking-[0.32em]">MOUNTING SESSION…</p>
       </main>
     );
   }
@@ -249,189 +283,148 @@ export function ResolutionTheaterApp() {
 
   if (!selected) {
     return (
-      <main className="chamber-root flex min-h-screen items-center justify-center text-[#e8b84a]">
-        <p className="font-board tracking-[0.32em]">NO DISPUTES</p>
+      <main className="os-desktop flex min-h-screen items-center justify-center text-[#e8b84a]">
+        <p className="font-board tracking-[0.32em]">NO PROCESSES</p>
       </main>
     );
   }
 
   const signed = selected.status === "APPROVED";
   const ineligible = selected.entitlement?.outcome === "ineligible" || selected.catalogBlocked;
-  const paperPulse = lastTool && !deskPulse(lastTool.name);
-  const counterPulse = lastTool && deskPulse(lastTool.name);
+  const paperPulse = Boolean(lastTool && !deskPulse(lastTool.name));
+  const counterPulse = Boolean(lastTool && deskPulse(lastTool.name));
+  const sessionLabel = theater.sessionId ? theater.sessionId.slice(0, 8) : "--------";
 
   return (
-    <main className="chamber-root min-h-screen text-[#f4efe4]" aria-busy={Boolean(pending)}>
-      <a href="#disputes" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:bg-[#e8b84a] focus:px-3 focus:py-2 focus:text-[#0b1f3a]">
-        Skip to task manager
-      </a>
-      <a href="#counter" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-16 focus:bg-[#e8b84a] focus:px-3 focus:py-2 focus:text-[#0b1f3a]">
-        Skip to inspector
-      </a>
-      <TheaterWebMcp
-        onStatus={(ready, reason, tools) => setWebmcp({ ready, reason, tools })}
-      />
+    <main className="os-desktop flex min-h-screen flex-col text-[#f4efe4]" aria-busy={Boolean(pending)}>
+      <TheaterWebMcp onStatus={(ready, reason, tools) => setWebmcp({ ready, reason, tools })} />
 
-      <div className="border-b border-[#e8b84a]/25 bg-[#050d18] px-4 py-2 sm:px-8">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
-          <p className="font-board text-xs tracking-[0.28em] text-[#e8b84a]">
-            AEGIS OS · DISPUTE RUNTIME · SESSION {theater.sessionId.slice(0, 8)}
-          </p>
+      <header className="border-b border-[#e8b84a]/25 bg-[#050d18]/95 px-3 py-2 sm:px-5">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-3">
+            <p className="font-board text-sm tracking-[0.28em] text-[#e8b84a]">AEGIS OS</p>
+            <span className="hidden font-mono text-[11px] text-white/40 sm:inline">session {sessionLabel}</span>
+          </div>
           <div className="flex flex-wrap items-center gap-3 font-mono text-[11px]">
             <span className={webmcp.ready ? "text-[#9dffa1]" : "text-[#ffb4a8]"} role="status" aria-live="polite">
               {webmcp.ready ? "WEBMCP ONLINE" : "WEBMCP OFF"}
             </span>
-            <span className="text-white/35">|</span>
-            <span className="text-white/55">{awaiting.length} awaiting UAC</span>
-            <span className="text-white/35">|</span>
-            <span className="text-white/55">{formatEuro(recoverable)} at stake</span>
+            <span className="text-white/30">|</span>
+            <span className="text-white/55">{awaiting.length} UAC</span>
+            <span className="text-white/30">|</span>
+            <span className="text-white/55">{formatEuro(recoverable)} stake</span>
+            <button
+              type="button"
+              className="theater-btn text-white/45 hover:text-[#e8b84a]"
+              disabled={Boolean(pending)}
+              onClick={() => void openSession(true)}
+            >
+              {pending === "reset" ? "…" : "New session"}
+            </button>
           </div>
-        </div>
-      </div>
-
-      <header className="border-b border-[#e8b84a]/25 bg-[#071525] px-4 py-4 sm:px-8">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="font-board text-xs tracking-[0.34em] text-[#e8b84a]">SHARED DESKTOP</p>
-            <h1 className="mt-1 text-balance font-board text-4xl uppercase leading-none tracking-wide sm:text-5xl">
-              You sign. It files. The row must match.
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm text-white/70">
-              ChatGPT works this desktop through WebMCP. You own the signature. Software owns the money math. The
-              provider row is the only source of truth.
-            </p>
-          </div>
-          <p className="max-w-md text-sm text-white/55">{webmcp.reason}</p>
         </div>
       </header>
 
-      <section className="border-b border-[#e8b84a]/20 bg-[#e8b84a] px-4 py-3 text-[#0b1f3a] sm:px-8">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="font-board text-[11px] tracking-[0.22em]">COMMAND · CHATGPT IN-APP BROWSER</p>
-            <p className="mt-1 text-sm leading-relaxed">
-              Say <span className="font-mono text-[15px] font-semibold">“{prompt}”</span> — Aegis will prepare filings and
-              stop for your signature. Then say <span className="font-mono text-[15px] font-semibold">“Continue.”</span>
-            </p>
-          </div>
+      <section className="border-b border-[#0b1f3a] bg-[#e8b84a] px-3 py-2.5 text-[#0b1f3a] sm:px-5">
+        <div className="mx-auto flex max-w-7xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm leading-snug">
+            <span className="font-board text-[11px] tracking-[0.2em]">COMMAND</span>
+            <span className="ml-2">
+              Say <span className="font-mono font-semibold">“{prompt}”</span> then{" "}
+              <span className="font-mono font-semibold">“Continue.”</span> after you sign.
+            </span>
+          </p>
           <button
             type="button"
             onClick={() => void copyPrompt()}
-            className="theater-btn shrink-0 bg-[#0b1f3a] px-4 py-2 text-sm text-[#e8b84a]"
+            className="theater-btn shrink-0 bg-[#0b1f3a] px-3 py-2 text-sm text-[#e8b84a]"
             aria-label="Copy demo goal to clipboard"
             aria-pressed={copied}
           >
-            {copied ? "Copied — paste in ChatGPT" : "Copy “Go ahead.”"}
+            {copied ? "Copied" : "Copy “Go ahead.”"}
           </button>
         </div>
       </section>
 
-      <div className="mx-auto grid max-w-6xl gap-0 lg:grid-cols-[0.95fr_1.05fr]">
-        <section
-          id="disputes"
-          className={`os-window bg-[#ede6d6] text-[#1a1714] ${paperPulse ? "chamber-pulse" : ""}`}
+      <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-3 px-3 py-3 pb-28 sm:px-5 lg:grid lg:grid-cols-[0.95fr_1.05fr] lg:pb-24">
+        <WindowFrame
+          title="Task Manager · Disputes"
+          active={app === "processes"}
+          pulse={paperPulse}
+          tone="paper"
+          className={`bg-[#ede6d6] text-[#1a1714] ${app === "processes" ? "" : "hidden lg:flex"}`}
+          onFocus={() => setApp("processes")}
         >
-          <div className="os-titlebar border-b border-[#1a1714]/20 bg-[#d9d0bc] px-4 py-2 sm:px-6">
-            <div className="flex items-center justify-between gap-3">
-              <p className="font-board text-xs tracking-[0.28em] text-[#8a3b12]">TASK MANAGER · DISPUTES</p>
-              <span className="font-mono text-[10px] text-[#5c5348]">{theater.items.length} processes</span>
-            </div>
-          </div>
-          <div className="border-b border-dashed border-[#1a1714]/30 px-6 py-4 sm:px-8">
-            <p className="max-w-xl text-sm text-[#5c5348]">
-              Money on this desktop: <strong>{formatEuro(recoverable)}</strong> if eligible rows pay. One blocked booking
-              must not file.
-            </p>
-          </div>
-
-          <div className="space-y-4 px-6 py-6 sm:px-8">
-            <ol className="space-y-2">
-              {theater.items.map((item) => (
-                <WorkItemRow
-                  key={item.id}
-                  item={item}
-                  active={item.id === selected.id}
-                  onSelect={() => setSelectedId(item.id)}
-                />
-              ))}
-            </ol>
-
-            <div className="border-t border-[#1a1714]/15 pt-5">
-              <p className="text-xs uppercase tracking-[0.2em] text-[#8a3b12]">UAC · Your signature</p>
-              {awaiting.length === 0 ? (
-                <p className="mt-2 text-sm text-[#5c5348]">
-                  No elevation pending. Run Begin resolution, or let the agent say Go ahead.
-                </p>
-              ) : (
-                <ul className="mt-3 space-y-3">
-                  {awaiting.map((item) => (
-                    <li key={item.id} className="border border-[#1a1714]/20 bg-white/70 p-4" aria-labelledby={`sign-${item.id}`}>
-                      <p id={`sign-${item.id}`} className="text-sm font-medium">
-                        {item.title}
-                      </p>
-                      <p className="mt-1 font-board text-5xl leading-none">{formatEuro(item.proposal?.amount)}</p>
-                      <p className="mt-2 font-mono text-xs text-[#5c5348]">
-                        {item.proposal?.toolName} · {identityLine(item)}
-                      </p>
-                      <p className="mt-2 text-sm text-[#5c5348]">{item.entitlement?.reasons[0]}</p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          className="theater-btn theater-btn-paper bg-[#1a1714] px-3 py-2 text-sm text-[#ede6d6] disabled:opacity-40"
-                          disabled={Boolean(pending)}
-                          onClick={() => void decide(item.id, "approved")}
-                        >
-                          {pending === `decide:approved:${item.id}`
-                            ? "Signing…"
-                            : `Sign ${formatEuro(item.proposal?.amount)}`}
-                        </button>
-                        <button
-                          type="button"
-                          className="theater-btn theater-btn-paper border border-[#1a1714] px-3 py-2 text-sm disabled:opacity-40"
-                          disabled={Boolean(pending)}
-                          onClick={() => void decide(item.id, "denied")}
-                        >
-                          {pending === `decide:denied:${item.id}` ? "Denying…" : "Deny"}
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {actionError ? (
-                <p className="mt-3 text-sm text-[#9b1c1c]" role="alert">
-                  {actionError}
-                </p>
+          <p className="border-b border-dashed border-[#1a1714]/25 px-4 py-3 text-sm text-[#5c5348] sm:px-5">
+            Money on this desktop: <strong>{formatEuro(recoverable)}</strong>. One blocked booking must not file.
+          </p>
+          <ol className="space-y-2 px-4 py-4 sm:px-5">
+            {theater.items.map((item) => (
+              <WorkItemRow
+                key={item.id}
+                item={item}
+                active={item.id === selected.id}
+                onSelect={() => {
+                  setSelectedId(item.id);
+                  setApp("inspector");
+                }}
+              />
+            ))}
+          </ol>
+          <div className="mt-auto border-t border-[#1a1714]/15 px-4 py-4 sm:px-5">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="theater-btn bg-[#1a1714] px-3 py-2 text-sm text-[#ede6d6] disabled:opacity-40"
+                disabled={Boolean(pending)}
+                onClick={() => void beginResolution()}
+              >
+                {pending === "begin" ? "Starting…" : "Begin resolution"}
+              </button>
+              <button
+                type="button"
+                className="theater-btn border border-[#1a1714] px-3 py-2 text-sm disabled:opacity-40"
+                disabled={
+                  Boolean(pending) ||
+                  awaiting.length > 0 ||
+                  !theater.items.some((item) => item.status === "APPROVED")
+                }
+                onClick={() => void continueResolution()}
+              >
+                {pending === "continue" ? "Continuing…" : "Continue after signatures"}
+              </button>
+              {awaiting.length > 0 ? (
+                <button
+                  type="button"
+                  className="theater-btn border border-[#8a3b12] px-3 py-2 text-sm text-[#8a3b12]"
+                  onClick={() => setUacOpen(true)}
+                >
+                  Open UAC ({awaiting.length})
+                </button>
               ) : null}
             </div>
+            {actionError && app === "processes" ? (
+              <p className="mt-3 text-sm text-[#9b1c1c]" role="alert">
+                {actionError}
+              </p>
+            ) : null}
           </div>
-        </section>
+        </WindowFrame>
 
-        <section
-          id="counter"
-          className={`os-window scroll-mt-4 border-t border-[#e8b84a]/20 bg-[#0b1f3a] lg:border-l lg:border-t-0 ${
-            counterPulse ? "chamber-pulse-desk" : ""
-          }`}
+        <WindowFrame
+          title="Inspector · Provider row"
+          active={app === "inspector"}
+          pulse={counterPulse}
+          className={`border border-[#e8b84a]/20 bg-[#0b1f3a] ${app === "inspector" ? "" : "hidden lg:flex"}`}
+          onFocus={() => setApp("inspector")}
         >
-          <div className="os-titlebar flex items-center justify-between border-b border-white/10 px-6 py-3 sm:px-8">
+          <div className="space-y-4 px-4 py-4 sm:px-5">
             <div>
-              <p className="font-board text-xs tracking-[0.3em] text-[#e8b84a]">INSPECTOR · PROVIDER ROW</p>
               <p className="font-board text-3xl uppercase tracking-wide">{selected.title}</p>
+              <p className="mt-2 text-sm text-white/70">{selected.problem}</p>
+              <p className="mt-1 font-mono text-[11px] text-white/35">{selected.source}</p>
             </div>
-            <button
-              type="button"
-              className="theater-btn font-mono text-[11px] text-white/50"
-              disabled={Boolean(pending)}
-              onClick={() => void openSession(true)}
-            >
-              {pending === "reset" ? "Booting…" : "New session"}
-            </button>
-          </div>
-
-          <div className="space-y-5 px-6 py-6 sm:px-8">
             <Pipeline status={selected.status} />
-            <p className="text-sm text-white/70">{selected.problem}</p>
-            <p className="font-mono text-[11px] text-white/40">{selected.source}</p>
             <CounterRecord item={selected} />
             <DeskBlock
               label="Engine amount"
@@ -440,72 +433,36 @@ export function ResolutionTheaterApp() {
                   ? `${selected.entitlement.outcome} · ${formatEuro(selected.entitlement.amount)}`
                   : "—"
               }
-              note={selected.entitlement?.reasons[0] ?? "Inspect the counter. Amounts come from the row, not the model."}
+              note={selected.entitlement?.reasons[0] ?? "Amounts come from the row, not the model."}
             />
 
             {selected.catalogBlocked ? (
-              <div
-                className="border-2 border-[#ffb4a8] bg-[#ffb4a8]/10 px-4 py-4 text-[#ffb4a8]"
-                role="status"
-                aria-live="polite"
-              >
+              <div className="border-2 border-[#ffb4a8] bg-[#ffb4a8]/10 px-4 py-4 text-[#ffb4a8]" role="status">
                 <p className="font-board text-xs tracking-[0.22em]">KERNEL BLOCK · FR0999 / BERG</p>
                 <p className="mt-2 text-lg font-medium">Already claimed. Do not file.</p>
-                <p className="mt-1 text-sm text-[#ffb4a8]/80">
-                  begin_resolution skips this process. prepare_filing returns NOT_ELIGIBLE.
-                </p>
               </div>
             ) : ineligible ? (
               <p className="border border-[#ffb4a8]/40 px-3 py-2 text-sm text-[#ffb4a8]" role="status">
-                Process blocked. Prepare and file must fail. Do not sign this one.
+                Process blocked. Do not sign this one.
               </p>
             ) : null}
 
             {lastTool && !lastTool.ok && lastTool.code === "APPROVAL_REQUIRED" ? (
-              <div
-                className="border-2 border-[#e8b84a] bg-[#e8b84a]/15 px-4 py-4 text-[#e8b84a]"
-                role="alert"
-                aria-live="assertive"
-              >
+              <div className="border-2 border-[#e8b84a] bg-[#e8b84a]/15 px-4 py-4 text-[#e8b84a]" role="alert">
                 <p className="font-board text-xs tracking-[0.22em]">UAC DENIED · APPROVAL_REQUIRED</p>
                 <p className="mt-2 text-lg font-medium">Unsigned filing refused.</p>
-                <p className="mt-1 text-sm text-[#e8b84a]/85">
-                  Sign the amount under Task Manager, then Continue — or say “Continue.” in ChatGPT.
-                </p>
               </div>
             ) : null}
 
             {selected.status === "APPROVED" && !selected.verification ? (
               <p className="border border-[#e8b84a]/40 px-3 py-2 text-sm text-[#e8b84a]" role="status">
-                UAC granted. Agent may call continue_resolution (or execute_filing → verify_filing).
-              </p>
-            ) : null}
-
-            {pending === "begin" || pending === "continue" ? (
-              <p className="font-mono text-xs text-[#e8b84a]" role="status">
-                {pending === "begin" ? "begin_resolution running…" : "continue_resolution running…"}
+                UAC granted. Call continue_resolution (or execute → verify).
               </p>
             ) : null}
 
             <VerificationPanel item={selected} />
 
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="theater-btn bg-[#e8b84a] px-3 py-2 text-sm text-[#0b1f3a] disabled:opacity-40"
-                disabled={Boolean(pending)}
-                onClick={() => void beginResolution()}
-              >
-                {pending === "begin" ? "Starting…" : "Begin resolution"}
-              </button>
-              <button
-                type="button"
-                className="theater-btn border border-[#e8b84a] px-3 py-2 text-sm text-[#e8b84a] disabled:opacity-40"
-                disabled={Boolean(pending) || awaiting.length > 0 || !theater.items.some((item) => item.status === "APPROVED")}
-                onClick={() => void continueResolution()}
-              >
-                {pending === "continue" ? "Continuing…" : "Continue after signatures"}
-              </button>
               <button
                 type="button"
                 className="theater-btn border border-white/30 px-3 py-2 text-sm disabled:opacity-40"
@@ -527,74 +484,249 @@ export function ResolutionTheaterApp() {
                 className="theater-btn border border-white/30 px-3 py-2 text-sm disabled:opacity-40"
                 disabled={Boolean(pending) || !signed}
                 onClick={() => void fileSigned(selected.id)}
-                title={!signed ? "Sign the amount first" : undefined}
               >
                 {pending === "file" ? "Filing…" : "File signed claim"}
               </button>
             </div>
-            {actionError ? (
+            {actionError && app === "inspector" ? (
               <p className="text-sm text-[#ffb4a8]" role="alert">
                 {actionError}
               </p>
             ) : null}
-            <p className="border border-white/10 px-3 py-2 text-xs text-white/55">
-              Judge proof: File without signature must return APPROVAL_REQUIRED. Begin / Continue use the same WebMCP
-              tools ChatGPT calls.
+            <p className="font-mono text-[11px] text-white/40">{webmcp.reason}</p>
+          </div>
+        </WindowFrame>
+
+        <WindowFrame
+          title="System Console · Agent ledger"
+          active={app === "console"}
+          className={`border border-[#e8b84a]/20 bg-[#050d18] lg:col-span-2 ${
+            app === "console" ? "" : "hidden lg:flex"
+          }`}
+          onFocus={() => setApp("console")}
+        >
+          <div className="max-h-56 overflow-auto px-4 py-4 sm:px-5" aria-live="polite">
+            {tape.length === 0 ? (
+              <p className="font-mono text-sm text-white/35">
+                Waiting for tool calls. Preferred: begin_resolution · continue_resolution.
+              </p>
+            ) : (
+              <ol className="space-y-2">
+                {tape.map((entry, index) => {
+                  const copy = ledgerCopy({ name: entry.name, ok: entry.ok, code: entry.code });
+                  return (
+                    <li
+                      key={`${entry.at}-${entry.name}-${index}`}
+                      className={`border-l-2 pl-3 ${
+                        entry.ok ? "border-[#9dffa1] text-[#9dffa1]" : "border-[#ffb4a8] text-[#ffb4a8]"
+                      }`}
+                    >
+                      <p className="text-sm">
+                        {entry.ok ? "OK" : "ERR"}: {copy.headline}
+                      </p>
+                      <p className="font-mono text-[11px] text-white/45">
+                        {entry.name} · {copy.detail}
+                        {entry.requestId ? ` · ${entry.requestId}` : ""}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </div>
+        </WindowFrame>
+
+        <WindowFrame
+          title="About · Kernel policy"
+          active={app === "about"}
+          className={`border border-[#e8b84a]/20 bg-[#0b1f3a] lg:col-span-2 ${
+            app === "about" ? "flex" : "hidden"
+          }`}
+          onFocus={() => setApp("about")}
+        >
+          <div className="space-y-4 px-4 py-5 sm:px-6">
+            <h2 className="font-board text-3xl uppercase tracking-wide text-[#e8b84a]">
+              You sign. It files. The row must match.
+            </h2>
+            <p className="max-w-3xl text-sm leading-relaxed text-white/70">
+              Aegis OS is not a chatbot. ChatGPT operates this desktop through WebMCP. You authorize money. Software
+              owns entitlement math. Success is a provider re-read — expected vs observed.
+            </p>
+            <ul className="grid gap-3 sm:grid-cols-2">
+              <AboutFact title="You" body="Only a person signs. The model never grants itself permission." />
+              <AboutFact title="ChatGPT" body="Calls begin_resolution, then continue_resolution after UAC." />
+              <AboutFact title="Software" body="Amounts come from deterministic policy against live rows." />
+              <AboutFact title="Provider" body="verify_filing must match. Otherwise do not declare success." />
+            </ul>
+            <p className="font-mono text-[11px] text-white/40">
+              FR0999 / BERG stays blocked. Eligible rows: fresh FlyRight ticket + Streamly subscription.
             </p>
           </div>
-        </section>
+        </WindowFrame>
       </div>
 
-      <section className="border-t border-[#e8b84a]/20 bg-[#050d18] px-4 py-5 sm:px-8" aria-live="polite">
-        <div className="mx-auto max-w-6xl">
-          <p className="font-board text-xs tracking-[0.28em] text-[#e8b84a]">SYSTEM CONSOLE · AGENT LEDGER</p>
-          {tape.length === 0 ? (
-            <p className="mt-3 font-mono text-sm text-white/35">
-              Waiting for a tool call. Preferred: begin_resolution · continue_resolution. Atomic tools also live here.
-            </p>
-          ) : (
-            <ol className="mt-3 space-y-2">
-              {tape.map((entry, index) => {
-                const copy = ledgerCopy({
-                  name: entry.name,
-                  ok: entry.ok,
-                  code: entry.code,
-                });
-                return (
-                  <li
-                    key={`${entry.at}-${entry.name}-${index}`}
-                    className={`border-l-2 pl-3 ${entry.ok ? "border-[#9dffa1] text-[#9dffa1]" : "border-[#ffb4a8] text-[#ffb4a8]"}`}
-                  >
-                    <p className="text-sm">
-                      {entry.ok ? "OK" : "ERR"}: {copy.headline}
-                    </p>
-                    <p className="font-mono text-[11px] text-white/45">
-                      {entry.name} · {copy.detail}
-                      {entry.requestId ? ` · ${entry.requestId}` : ""}
-                    </p>
-                  </li>
-                );
-              })}
-            </ol>
-          )}
-          <p className="mt-4 font-mono text-[11px] text-white/35">
-            Kernel policy: FR0999 / BERG stays blocked. Eligible rows are a fresh FlyRight ticket and a Streamly
-            subscription.
-          </p>
+      <nav
+        className="os-dock fixed bottom-0 left-0 right-0 z-40 border-t border-[#e8b84a]/25 px-3 py-2 sm:px-5"
+        aria-label="Aegis OS dock"
+      >
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2">
+          <div className="flex flex-1 gap-1 overflow-x-auto">
+            {APPS.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                className={`theater-btn shrink-0 px-3 py-2 text-xs sm:text-sm ${
+                  app === entry.id ? "bg-[#e8b84a] text-[#0b1f3a]" : "text-white/70 hover:bg-white/5"
+                }`}
+                aria-current={app === entry.id ? "page" : undefined}
+                onClick={() => setApp(entry.id)}
+              >
+                <span className="sm:hidden">{entry.short}</span>
+                <span className="hidden sm:inline">{entry.label}</span>
+              </button>
+            ))}
+          </div>
+          {awaiting.length > 0 ? (
+            <button
+              type="button"
+              className="theater-btn shrink-0 bg-[#e8b84a] px-3 py-2 text-xs font-medium text-[#0b1f3a] sm:text-sm"
+              onClick={() => setUacOpen(true)}
+            >
+              UAC · {awaiting.length}
+            </button>
+          ) : null}
         </div>
-      </section>
+      </nav>
+
+      {uacOpen && awaiting.length > 0 ? (
+        <div className="os-uac-scrim fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-6">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="uac-title"
+            className="os-window max-h-[85vh] w-full max-w-lg overflow-auto border border-[#e8b84a]/50 bg-[#ede6d6] text-[#1a1714]"
+          >
+            <div className="os-titlebar flex items-center justify-between border-b border-[#1a1714]/15 bg-[#d9d0bc] px-4 py-3">
+              <p id="uac-title" className="font-board text-xs tracking-[0.24em] text-[#8a3b12]">
+                USER ACCOUNT CONTROL
+              </p>
+              <button type="button" className="theater-btn text-sm text-[#5c5348]" onClick={() => setUacOpen(false)}>
+                Minimize
+              </button>
+            </div>
+            <div className="space-y-4 px-4 py-5">
+              <p className="text-sm text-[#5c5348]">
+                Aegis wants to file money-changing actions. Sign each amount. Deny stops that process.
+              </p>
+              {awaiting.map((item) => (
+                <div key={item.id} className="border border-[#1a1714]/20 bg-white/70 p-4">
+                  <p className="text-sm font-medium">{item.title}</p>
+                  <p className="mt-1 font-board text-5xl leading-none">{formatEuro(item.proposal?.amount)}</p>
+                  <p className="mt-2 font-mono text-xs text-[#5c5348]">
+                    {item.proposal?.toolName ?? "filing"} · {identityLine(item)}
+                  </p>
+                  <p className="mt-2 text-sm text-[#5c5348]">{item.entitlement?.reasons[0]}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="theater-btn bg-[#1a1714] px-3 py-2 text-sm text-[#ede6d6] disabled:opacity-40"
+                      disabled={Boolean(pending)}
+                      onClick={() => void decide(item.id, "approved")}
+                    >
+                      {pending === `decide:approved:${item.id}`
+                        ? "Signing…"
+                        : `Sign ${formatEuro(item.proposal?.amount)}`}
+                    </button>
+                    <button
+                      type="button"
+                      className="theater-btn border border-[#1a1714] px-3 py-2 text-sm disabled:opacity-40"
+                      disabled={Boolean(pending)}
+                      onClick={() => void decide(item.id, "denied")}
+                    >
+                      {pending === `decide:denied:${item.id}` ? "Denying…" : "Deny"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {actionError ? (
+                <p className="text-sm text-[#9b1c1c]" role="alert">
+                  {actionError}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
 
+function WindowFrame({
+  title,
+  children,
+  className,
+  active,
+  pulse,
+  tone = "ink",
+  onFocus,
+}: {
+  title: string;
+  children: ReactNode;
+  className?: string;
+  active?: boolean;
+  pulse?: boolean;
+  tone?: "ink" | "paper";
+  onFocus?: () => void;
+}) {
+  return (
+    <section
+      className={`os-window flex min-h-0 flex-col overflow-hidden ${active ? "ring-1 ring-[#e8b84a]/50" : ""} ${
+        pulse ? "chamber-pulse-desk" : ""
+      } ${className ?? ""}`}
+      onMouseDown={onFocus}
+    >
+      <div
+        className={`os-titlebar flex items-center justify-between border-b px-4 py-2 ${
+          tone === "paper" ? "border-[#1a1714]/15 bg-[#d9d0bc]" : "border-white/10"
+        }`}
+      >
+        <p
+          className={`font-board text-[11px] tracking-[0.22em] ${
+            tone === "paper" ? "text-[#8a3b12]" : "text-[#e8b84a]"
+          }`}
+        >
+          {title}
+        </p>
+        <span className="flex gap-1" aria-hidden>
+          <span className={`h-2.5 w-2.5 rounded-full ${tone === "paper" ? "bg-[#1a1714]/20" : "bg-white/20"}`} />
+          <span className={`h-2.5 w-2.5 rounded-full ${tone === "paper" ? "bg-[#1a1714]/20" : "bg-white/20"}`} />
+          <span className="h-2.5 w-2.5 rounded-full bg-[#e8b84a]/70" />
+        </span>
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+    </section>
+  );
+}
+
+function AboutFact({ title, body }: { title: string; body: string }) {
+  return (
+    <li className="border border-white/10 px-3 py-3">
+      <p className="font-board text-xl uppercase tracking-wide text-[#e8b84a]">{title}</p>
+      <p className="mt-1 text-sm text-white/65">{body}</p>
+    </li>
+  );
+}
+
 function identityLine(item: TheaterWorkItemSnapshot) {
-  if (item.identity.providerId === "flyright") {
-    return `${item.identity.locator} / ${item.identity.lastName}`;
+  const identity = item.identity;
+  if (!identity) return "—";
+  if (identity.providerId === "flyright") {
+    return `${identity.locator} / ${identity.lastName}`;
   }
-  if (item.identity.providerId === "streamly") {
-    return `${item.identity.subscriptionId} / ${item.identity.accountEmail}`;
+  if (identity.providerId === "streamly") {
+    return `${identity.subscriptionId} / ${identity.accountEmail}`;
   }
-  return `${item.identity.orderId} / ${item.identity.lastName}`;
+  return `${identity.orderId} / ${identity.lastName}`;
 }
 
 function WorkItemRow({
@@ -607,6 +739,7 @@ function WorkItemRow({
   onSelect: () => void;
 }) {
   const amount = item.proposal?.amount ?? item.entitlement?.amount;
+  const status = String(item.status ?? "UNKNOWN");
   return (
     <li>
       <button
@@ -629,7 +762,7 @@ function WorkItemRow({
         <p className="mt-1 font-mono text-[11px] text-[#5c5348]">{identityLine(item)}</p>
         <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[#8a3b12]">
           {item.catalogBlocked ? "BLOCKED · " : ""}
-          {item.providerId} · {item.status.replaceAll("_", " ").toLowerCase()}
+          {item.providerId} · {status.replaceAll("_", " ").toLowerCase()}
         </p>
       </button>
     </li>
@@ -650,7 +783,11 @@ function Pipeline({ status }: { status: TheaterWorkItemSnapshot["status"] }) {
           <li
             key={step}
             className={`px-2 py-1 font-mono text-[10px] uppercase tracking-wide ${
-              here ? "bg-[#e8b84a] text-[#0b1f3a]" : reached ? "border border-white/30 text-white" : "border border-white/10 text-white/35"
+              here
+                ? "bg-[#e8b84a] text-[#0b1f3a]"
+                : reached
+                  ? "border border-white/30 text-white"
+                  : "border border-white/10 text-white/35"
             }`}
           >
             {step.replaceAll("_", " ")}
@@ -671,7 +808,7 @@ function CounterRecord({ item }: { item: TheaterWorkItemSnapshot }) {
   if (!counter) {
     return (
       <p className="theater-empty-desk text-sm text-white/60">
-        No record on the desk. Look up this row — the passenger or plan appears here.
+        No record yet. Begin resolution or Inspect row — the passenger or plan appears here.
       </p>
     );
   }
@@ -730,27 +867,21 @@ function VerificationPanel({ item }: { item: TheaterWorkItemSnapshot }) {
   if (!item.verification) {
     return null;
   }
-  const expected = item.verification.expected;
-  const observed = item.verification.observed;
   const matched = item.verification.matched;
   return (
     <div
       role="status"
       aria-live="assertive"
       className={`border-2 px-4 py-4 ${
-        matched
-          ? "border-[#9dffa1] bg-[#9dffa1]/15 text-[#9dffa1]"
-          : "border-[#ffb4a8] bg-[#ffb4a8]/10 text-[#ffb4a8]"
+        matched ? "border-[#9dffa1] bg-[#9dffa1]/15 text-[#9dffa1]" : "border-[#ffb4a8] bg-[#ffb4a8]/10 text-[#ffb4a8]"
       }`}
     >
-      <p className="font-board text-xs tracking-[0.22em]">
-        {matched ? "VERIFY · MATCHED" : "VERIFY · MISMATCH"}
-      </p>
+      <p className="font-board text-xs tracking-[0.22em]">{matched ? "VERIFY · MATCHED" : "VERIFY · MISMATCH"}</p>
       <p className="mt-2 font-board text-3xl uppercase leading-none tracking-wide">
         {matched ? "Row matches. Done." : "Do not declare success."}
       </p>
-      <p className="mt-3 font-mono text-[11px] text-white/70">expected {summarize(expected)}</p>
-      <p className="font-mono text-[11px] text-white/70">observed {summarize(observed)}</p>
+      <p className="mt-3 font-mono text-[11px] text-white/70">expected {summarize(item.verification.expected)}</p>
+      <p className="font-mono text-[11px] text-white/70">observed {summarize(item.verification.observed)}</p>
     </div>
   );
 }
