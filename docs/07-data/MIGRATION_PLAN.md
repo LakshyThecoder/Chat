@@ -1,0 +1,16 @@
+# Migration Plan
+
+001_extensions_and_enums
+002_users_profiles
+003_cases
+004_documents_evidence
+005_timeline
+006_policies
+007_claims
+008_permissions
+009_agent_runs_actions
+010_provider_tools
+011_resolutions_notifications
+012_rls_and_grants
+013_indexes
+014_demo_seed

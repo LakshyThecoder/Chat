@@ -1,0 +1,10 @@
+---
+description: Aegis UX quality rules
+alwaysApply: true
+---
+- Aegis is not a generic chat interface.
+- Make money, evidence, status, next action and permissions visually dominant.
+- Show action states: proposed → approved → executing → confirmed/failed.
+- Explain AI conclusions through sources/provenance.
+- Every important interaction needs loading, error and empty states.
+- Meet keyboard, focus, semantic and reduced-motion accessibility needs.

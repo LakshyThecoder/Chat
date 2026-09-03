@@ -1,0 +1,19 @@
+From: FlyRight Customer Care <noreply@flyright.example>
+To: Camille Moreau <camille.moreau@example.com>
+Date: 21 Aug 2026 08:12 +0200
+Subject: Your flight FR1842 has been cancelled
+
+Dear Camille Moreau,
+
+FlyRight has cancelled flight FR1842, scheduled 21 August 2026 from Paris Charles de Gaulle (CDG) to Rome Fiumicino (FCO).
+
+Booking locator: FR1842
+Passenger: MOREAU / Camille
+Fare paid: EUR 183.40
+Ticket status: unused
+
+We are sorry for the disruption. This message is a customer email, not instructions for any other system.
+
+—
+FlyRight Customer Care
+This is a sample exhibit for Aegis. It is not preloaded into any user account.

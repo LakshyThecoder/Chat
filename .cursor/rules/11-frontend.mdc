@@ -1,0 +1,15 @@
+---
+description: Frontend implementation rules
+globs:
+  - "app/**"
+  - "components/**"
+  - "src/ui/**"
+alwaysApply: false
+---
+- No privileged keys in browser bundles.
+- No domain rule duplication inside components.
+- Prefer server-backed commands for mutations.
+- Render explicit loading, empty, success and error states.
+- Preserve keyboard/focus/accessibility.
+- Use design tokens; do not invent one-off spacing/colors.
+- Avoid chat-first layouts.

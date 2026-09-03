@@ -1,0 +1,9 @@
+{
+  "provider": "electromart",
+  "orderId": "EM-55219",
+  "purchaseDate": "2025-10-04",
+  "warrantyMonths": 24,
+  "issue": "Device fails to power on",
+  "amount": "194.41",
+  "currency": "EUR"
+}

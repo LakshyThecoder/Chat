@@ -1,0 +1,11 @@
+---
+description: Aegis architecture boundaries
+alwaysApply: true
+---
+- UI never talks directly to privileged infrastructure.
+- Domain logic must not live in React components.
+- Provider-specific behavior belongs behind provider adapters/capability contracts.
+- AI is accessed through the AI Gateway, never directly from UI components.
+- Database access is server-side and policy-aware.
+- Domain state changes occur through commands/use-cases, not arbitrary writes.
+- Prefer explicit ports/interfaces at infrastructure boundaries.

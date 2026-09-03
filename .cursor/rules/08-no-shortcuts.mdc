@@ -1,0 +1,14 @@
+---
+description: Anti-shortcut quality gate
+alwaysApply: true
+---
+Reject these shortcuts:
+- hardcoded demo outcomes
+- fake WebMCP calls
+- hidden fallback success states
+- provider-specific branching in generic orchestration
+- direct LLM database writes
+- permission bypasses
+- untyped external data
+- giant unreviewed feature patches
+- untested consequential actions

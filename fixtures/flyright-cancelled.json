@@ -1,0 +1,10 @@
+{
+  "provider": "flyright",
+  "bookingId": "FR-28491",
+  "status": "CANCELLED",
+  "purchaseDate": "2026-08-14",
+  "cancelledAt": "2026-08-16T09:30:00Z",
+  "amount": "183.40",
+  "currency": "EUR",
+  "claimStatus": "NOT_SUBMITTED"
+}

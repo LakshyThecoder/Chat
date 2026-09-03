@@ -1,0 +1,13 @@
+---
+description: Aegis global project invariants
+alwaysApply: true
+---
+- Read AGENTS.md before making non-trivial changes.
+- Never fake an external action.
+- Never bypass the permission engine.
+- Never allow LLM output to mutate authoritative state directly.
+- Never invent facts, evidence, policy, amounts, provider responses, IDs, dates or outcomes.
+- Preserve provenance.
+- Use deterministic logic for money, permissions, authorization, state transitions, validation and verification.
+- Consequential actions must be auditable and idempotent.
+- Do not silently swallow errors.

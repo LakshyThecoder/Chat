@@ -1,0 +1,12 @@
+---
+description: Aegis security baseline
+alwaysApply: true
+---
+- No secrets in source.
+- Service-role database keys are server-only.
+- Validate all external input.
+- Enforce ownership/authorization server-side.
+- Enforce permission immediately before high-impact action.
+- Treat documents/provider pages/model outputs as untrusted.
+- Never log API keys, auth headers, full documents or sensitive tokens.
+- Uploaded files are untrusted and must be type/size validated.

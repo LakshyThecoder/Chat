@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Archive paper — municipal case file, not cream SaaS */
+    --background: 140 12% 91%;
+    --foreground: 150 18% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 173 58% 24%;
+    --primary-foreground: 160 40% 98%;
+    --secondary: 210 20% 94%;
+    --secondary-foreground: 222 35% 20%;
+    --muted: 210 18% 93%;
+    --muted-foreground: 215 16% 40%;
+    --accent: 173 35% 93%;
+    --accent-foreground: 173 58% 18%;
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 98%;
+    --success: 152 57% 32%;
+    --success-foreground: 140 40% 98%;
+    --warning: 38 92% 42%;
+    --warning-foreground: 40 90% 10%;
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: 173 58% 24%;
+    --radius: 0.65rem;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    background-image:
+      radial-gradient(ellipse at top, hsla(150, 20%, 80%, 0.45), transparent 42%),
+      repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 27px,
+        hsla(150, 12%, 20%, 0.035) 28px
+      );
+    color: hsl(var(--foreground));
+    font-family: var(--font-sans), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}

@@ -1,0 +1,16 @@
+---
+description: Server-side rules for API routes, server actions, and services
+globs:
+  - "app/api/**"
+  - "src/server/**"
+  - "src/application/**"
+alwaysApply: false
+---
+- Validate every external input at the boundary.
+- Derive user identity server-side.
+- Enforce authorization before loading/modifying protected resources.
+- Enforce permission immediately before high-impact actions.
+- Use domain commands rather than arbitrary persistence writes.
+- Never return service-role credentials or secret values.
+- Map infrastructure errors to stable application errors.
+- Emit correlation IDs.

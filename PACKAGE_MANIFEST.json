@@ -1,0 +1,20 @@
+{
+  "package": "Aegis Cursor Pack V3 \u2014 Ceiling Edition",
+  "status": "final pre-build context package",
+  "generated_file_count_before_manifest": 382,
+  "cursor": "AGENTS.md + .cursor/rules/*.mdc + nested AGENTS.md",
+  "primary_entrypoints": [
+    "CEILING.md",
+    "AGENTS.md",
+    "PROJECT_MANIFEST.md",
+    "docs/00-governance/SPEC_HIERARCHY.md",
+    "docs/00-governance/IMPLEMENTATION_PLAN.md",
+    "docs/02-architecture/SYSTEM_ARCHITECTURE.md",
+    "docs/04-ai/AI_SYSTEM_SPEC.md",
+    "docs/05-webmcp/WEBMCP_SYSTEM_SPEC.md",
+    "docs/08-security/THREAT_MODEL.md",
+    "docs/09-ux/SCREEN_SPEC.md",
+    "docs/10-testing/TEST_PLAN.md",
+    "docs/12-demo/DEMO_SPEC.md"
+  ]
+}

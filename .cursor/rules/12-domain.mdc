@@ -1,0 +1,12 @@
+---
+description: Domain module rules
+globs:
+  - "src/domain/**"
+alwaysApply: false
+---
+- Domain code remains infrastructure-agnostic.
+- Use explicit types and invariants.
+- State transitions must be explicit.
+- Throw/map typed domain errors, not provider exceptions.
+- Money uses fixed precision.
+- No LLM calls in the domain layer.

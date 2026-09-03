@@ -1,0 +1,10 @@
+{
+  "provider": "streamly",
+  "subscriptionId": "SUB-8842",
+  "status": "CANCELLED",
+  "cancelledAt": "2026-08-01T10:00:00Z",
+  "chargeDate": "2026-08-02T00:01:00Z",
+  "amount": "49.99",
+  "currency": "EUR",
+  "refundStatus": "ELIGIBLE"
+}

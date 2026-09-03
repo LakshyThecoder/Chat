@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PermissionDecision",
+  "type": "object",
+  "required": [
+    "decision",
+    "reason"
+  ],
+  "properties": {
+    "decision": {
+      "enum": [
+        "ALLOW",
+        "ASK",
+        "DENY"
+      ]
+    },
+    "reason": {
+      "type": "string"
+    },
+    "threshold": {
+      "type": [
+        "number",
+        "null"
+      ]
+    }
+  }
+}

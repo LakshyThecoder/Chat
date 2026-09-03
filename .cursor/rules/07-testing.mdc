@@ -1,0 +1,10 @@
+---
+description: Testing requirements
+alwaysApply: true
+---
+- Add tests for every new domain invariant.
+- Test both approval and denial paths.
+- Test duplicate/replay mutations.
+- Test provider state conflict.
+- Test malformed AI output.
+- Every consequential workflow requires an integration or E2E test.

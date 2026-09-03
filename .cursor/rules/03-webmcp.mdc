@@ -1,0 +1,10 @@
+---
+description: WebMCP implementation rules
+alwaysApply: true
+---
+- Use the current WebMCP specification as the source of truth.
+- Current target APIs include document.modelContext.registerTool(), getTools(), and executeTool().
+- Keep compatibility code isolated.
+- Every tool needs typed schema, side-effect classification, deterministic result/error contract, authorization expectations and idempotency behavior when mutating.
+- A provider tool must cause/observe real provider state.
+- Re-read provider state after consequential mutation.

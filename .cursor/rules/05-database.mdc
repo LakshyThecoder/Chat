@@ -1,0 +1,10 @@
+---
+description: Database invariants
+alwaysApply: true
+---
+- Use migrations.
+- Use Postgres NUMERIC for monetary values.
+- Enforce foreign keys and useful constraints.
+- Use RLS for user-owned data.
+- Audit tables are append-oriented.
+- Do not expose service-role operations to browser code.

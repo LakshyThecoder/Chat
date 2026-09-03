@@ -1,0 +1,14 @@
+---
+description: Test implementation rules
+globs:
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/*.spec.ts"
+  - "**/*.spec.tsx"
+alwaysApply: false
+---
+- Assert behavior/invariants, not implementation trivia.
+- Include denial and failure paths.
+- Avoid over-mocking domain logic.
+- Contract-test external boundaries.
+- Keep fixtures deterministic.

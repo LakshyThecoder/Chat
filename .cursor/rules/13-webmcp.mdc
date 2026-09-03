@@ -1,0 +1,13 @@
+---
+description: WebMCP implementation rules
+globs:
+  - "src/infrastructure/webmcp/**"
+  - "providers/**"
+alwaysApply: false
+---
+- Follow the current WebMCP specification.
+- Prefer stable capability contracts over UI/DOM assumptions.
+- Validate schemas and side-effect classes.
+- Mutation tools are replay-safe.
+- Provider reset/admin capabilities are never exposed to ordinary agent contexts.
+- Post-mutation verification is mandatory.
