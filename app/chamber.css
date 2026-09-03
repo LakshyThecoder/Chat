@@ -19,6 +19,24 @@
   box-shadow: inset 0 0 0 2px #e8b84a;
 }
 
+.theater-btn {
+  font: inherit;
+}
+
+.theater-btn:focus-visible {
+  outline: 2px solid #e8b84a;
+  outline-offset: 2px;
+}
+
+.theater-btn-paper:focus-visible {
+  outline-color: #8a3b12;
+}
+
+.theater-empty-desk {
+  border: 1px dashed rgba(255, 255, 255, 0.28);
+  padding: 1rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chamber-pulse,
   .chamber-pulse-desk {
@@ -27,3 +45,4 @@
     outline-offset: -2px;
   }
 }
+

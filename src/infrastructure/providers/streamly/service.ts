@@ -224,9 +224,13 @@ export class StreamlyProvider {
 
     if (error) {
       if (error.code === "23505") {
-        const replay = await this.getRefundForSubscription(subscription.subscriptionId);
-        if (replay) {
-          return replay;
+        const replayByKey = await this.client
+          .from("streamly_refunds")
+          .select("*")
+          .eq("idempotency_key", params.idempotencyKey)
+          .maybeSingle();
+        if (replayByKey.data) {
+          return mapRefund(replayByKey.data);
         }
         throw new StreamlyConflictError("A refund already exists for this subscription.");
       }

@@ -36,15 +36,19 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const correlationId =
     getCorrelationIdFromHeaders(new Headers(request.headers)) ?? generateCorrelationId();
+  const jar = await cookies();
+  const previousToken = jar.get(THEATER_COOKIE)?.value ?? null;
 
   try {
-    const { token, snapshot } = await createTheaterSession();
+    const { token, snapshot } = await createTheaterSession({ previousToken });
     const response = NextResponse.json({ theater: snapshot });
     response.cookies.set(THEATER_COOKIE, token, theaterCookieOptions());
     return withCorrelationHeaders(response, correlationId);
   } catch (error) {
+    if (error instanceof TheaterSessionError) {
+      return createErrorResponse(error.code, error.message, correlationId, error.status);
+    }
     const message = error instanceof Error ? error.message : "Could not open a theater session.";
     return createErrorResponse("THEATER_UNAVAILABLE", message, correlationId, 503, true);
   }
 }
-

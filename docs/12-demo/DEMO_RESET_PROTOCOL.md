@@ -1,12 +1,14 @@
 # Demo Reset Protocol
 
-Reset must be deterministic and reversible:
-1. Reset provider fixture.
-2. Reset demo user cases.
-3. Clear pending action state.
-4. Verify provider baseline.
-5. Verify Aegis baseline.
-6. Run one smoke execution.
-7. Reset again.
+Use the on-page **Fresh desk** control, or `POST /api/demo/theater/session`.
 
-Never edit the provider database manually during a live demo.
+That:
+1. Invalidates the previous theater cookie/session.
+2. Issues a new FlyRight booking and Streamly subscription.
+3. Re-attaches the shared FR0999 / BERG blocked row.
+4. Leaves prior sandbox rows in place (append-oriented; do not hand-edit provider tables during a live demo).
+
+Wait a few seconds between resets (rate limit). Then:
+1. Confirm three work items.
+2. File without signature → `APPROVAL_REQUIRED`.
+3. Do not reset again unless the desk is dirty.

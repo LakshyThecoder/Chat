@@ -9,6 +9,7 @@ export interface TheaterToolPulse {
   input?: Record<string, unknown>;
   output?: unknown;
   requestId?: string;
+  code?: string;
 }
 
 export function pulseTheaterTool(pulse: TheaterToolPulse) {

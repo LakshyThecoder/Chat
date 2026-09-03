@@ -203,9 +203,13 @@ export class FlyRightProvider {
 
     if (error) {
       if (error.code === "23505") {
-        const replay = await this.getClaimForBooking(booking.locator);
-        if (replay) {
-          return replay;
+        const replayByKey = await this.client
+          .from("flyright_claims")
+          .select("*")
+          .eq("idempotency_key", params.idempotencyKey)
+          .maybeSingle();
+        if (replayByKey.data) {
+          return mapClaim(replayByKey.data);
         }
         throw new FlyRightConflictError("A claim already exists for this booking.");
       }

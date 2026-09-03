@@ -1,28 +1,25 @@
 # Demo Preflight
 
 ## Product
-- Primary fixture resets.
-- Secondary fixture resets.
-- Case begins in known state.
-
-## AI
-- correct Regolo model selected
-- prompt versions pinned
-- evaluation fixtures green
-- fallback behavior tested
+- `GET /api/health/theater` returns `ok`.
+- `/` opens three work items without login.
+- FR0999 / BERG is visibly blocked.
 
 ## WebMCP
-- provider tools discoverable
-- tool schemas valid
-- mutation tool verified
-- reset/admin tools hidden from ordinary capability surface
+- Chrome 149+ with `chrome://flags/#enable-webmcp-testing` **or** ChatGPT in-app browser.
+- Header shows WebMCP ready and eight tool names.
+- `document.modelContext.getTools()` (if present) lists the same names.
+
+## Permission
+- File without signature → `APPROVAL_REQUIRED`.
+- Sign → execute → verify matched.
+- Replay execute does not duplicate the provider row.
 
 ## Browser
-- supported WebMCP environment confirmed
-- console free of blocking errors
-- network requests healthy
+- Console free of blocking errors.
+- Network: `/api/demo/theater/session` 200, tools 200/403 as expected.
+- Hard refresh after deploy.
 
 ## Narrative
-- 3-minute script rehearsed
-- every click intentional
-- no dead time
+- Yellow goal copied, not a tool recipe.
+- Video script: `docs/12-demo/VIDEO_SCRIPT.md`

@@ -72,10 +72,15 @@ export function assertTheaterExecute(input: {
     );
   }
 
-  if (input.status !== "APPROVED" && input.status !== "EXECUTED" && input.status !== "AWAITING_SIGNATURE") {
+  if (
+    input.status !== "APPROVED" &&
+    input.status !== "EXECUTED" &&
+    input.status !== "VERIFIED" &&
+    input.status !== "FAILED"
+  ) {
     throw new TheaterPermissionError(
       "STATE",
-      `Work item is not executable from state ${input.status}.`,
+      `Work item is not executable from state ${input.status}. Sign the prepared amount first.`,
     );
   }
 

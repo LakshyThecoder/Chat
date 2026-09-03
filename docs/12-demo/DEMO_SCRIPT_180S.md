@@ -1,32 +1,30 @@
 # 180-Second Demo
 
-0:00–0:20
-Show the confusing email/invoice.
-“Something went wrong. The consumer should not need to become a support specialist to fix it.”
+Canonical URL: https://aegis-chamber.vercel.app
 
-0:20–0:45
-Upload evidence. Show timeline and extracted facts.
+0:00–0:15
+Show the desk. Two recoverable disputes, one blocked booking. “The consumer should not have to become a support specialist.”
 
-0:45–1:05
-Show policy + evidence. “Aegis finds €183.40 potentially recoverable.”
+0:15–0:30
+WebMCP is on. Copy the yellow goal into ChatGPT. Tools are on this page.
+
+0:30–0:50
+Agent calls `inspect_counter`. Passenger / plan appear. Software computes the amount.
+
+0:50–1:05
+**File without signature.** Show `APPROVAL_REQUIRED` on the desk and in the ledger.
 
 1:05–1:25
-Show strategy and claim preview.
+Agent prepares. Human **signs** the engine amount. “The model does not own this number.”
 
-1:25–1:40
-Open permission. “This action requires approval under the user’s autonomy policy.”
+1:25–1:50
+`execute_filing` then `verify_filing`. Expected vs observed match. Claim/refund id is on the row.
 
-1:40–2:00
-Approve. Show WebMCP capability/execution.
+1:50–2:10
+Select FR0999 / BERG. Prepare fails. Already claimed stays blocked.
 
-2:00–2:15
-Provider state changes. Aegis verifies claim ID/status.
+2:10–2:40
+Second eligible row (Streamly) if time: same contract, different provider.
 
-2:15–2:35
-Show monitoring and follow-up.
-
-2:35–2:55
-Switch to another provider capability set. Same orchestration layer.
-
-2:55–3:00
-“The web, working for you.”
+2:40–3:00
+“People and agents share one desk. The web, working for you.”

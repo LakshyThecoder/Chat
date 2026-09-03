@@ -1,16 +1,19 @@
 # Demo Failure Playbook
 
-## If AI is slow
-Use preloaded fixture and cached structured extraction while still indicating the true state.
+## If WebMCP is off
+Do not claim tools are live. The header must stay red. Open ChatGPT’s in-app browser or Chrome with WebMCP testing enabled.
 
-## If provider tool fails
-Do not display fake success. Switch to a tested secondary provider fixture if the submission plan supports it.
+## If unsigned file is attempted
+Expected: `APPROVAL_REQUIRED`. That is the demo, not a failure.
 
-## If WebMCP discovery fails
-Use the documented target browser environment and a preflight check. Do not claim WebMCP succeeded if it did not.
+## If provider mutation fails
+Do not display fake success. The work item goes to `FAILED`. Retry `execute_filing` after the signature is still valid, then `verify_filing`.
 
-## If database is slow
-Provider state remains source of truth for provider action; Aegis must not fabricate synchronization.
+## If verification mismatches
+Leave the item `FAILED`. Do not say it paid.
 
-## Reset
-Every demo provider has deterministic reset fixtures.
+## If the desk will not open
+Check `GET /api/health/theater`. Apply theater migrations. Use **Fresh desk** only after the cooldown (a few seconds).
+
+## If FR0999 prepare succeeds
+Stop. The blocked catalog row is missing or was cleared. Restore the seed claim before recording.

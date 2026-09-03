@@ -38,6 +38,7 @@ export interface TheaterProposal {
   currency: string;
   idempotencyKey: string;
   expectedVerification: Record<string, unknown>;
+  version: number;
 }
 
 export interface TheaterVerification {
@@ -46,12 +47,21 @@ export interface TheaterVerification {
   matched: boolean;
 }
 
+export interface TheaterLastError {
+  code: string;
+  message: string;
+  at: string;
+}
+
 export interface TheaterWorkItemSnapshot {
   id: string;
   providerId: TheaterProviderId;
   title: string;
   identity: TheaterWorkItemIdentity;
   status: TheaterWorkItemStatus;
+  catalogBlocked: boolean;
+  problem: string;
+  source: string;
   counter: Record<string, unknown> | null;
   entitlement: EligibilityDecision | null;
   proposal: TheaterProposal | null;
@@ -63,11 +73,16 @@ export interface TheaterWorkItemSnapshot {
     deniedAt: string | null;
   };
   verification: TheaterVerification | null;
+  lastError: TheaterLastError | null;
+  attemptCount: number;
+  lastMutationId: string | null;
+  lastMutationStatus: string | null;
+  nextActions: string[];
 }
 
 export interface TheaterSnapshot {
   sessionId: string;
   expiresAt: string;
+  expired: boolean;
   items: TheaterWorkItemSnapshot[];
 }
-

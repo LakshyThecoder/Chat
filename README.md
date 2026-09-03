@@ -2,88 +2,61 @@
 
 **Live demo:** https://aegis-chamber.vercel.app
 
-A cancelled airline ticket, a person, and ChatGPT on **the same page**.
+ChatGPT and a person share **one refund desk**. The agent inspects live sandbox rows and prepares a filing. The person signs the amount. The provider row must then match. Success is a re-read, not a model saying it worked.
 
-The human holds the stub and the signature. The agent looks up the booking, calculates the unused-fare refund, and files. `submit_claim` fails until a person signs. The FlyRight desk paints from the tool call — it does not wait for a refresh. Success is a re-read of the claim row, not a model saying it worked.
+Two disputes can pay. **FR0999 / BERG is already claimed and must stay blocked.** Brands are labeled sandboxes. The rows are real and persisted. There is no login. Each visit issues a fresh FlyRight ticket and Streamly subscription so two judges cannot collide.
 
-There is no login on the demo. Each visit issues a **new sandbox ticket** cloned from FlyRight’s cancelled catalog record. The fare comes from that row. The engine does not hardcode €183.40.
-
-## Judge path (90 seconds)
+## Judge path (about two minutes)
 
 1. Open the live URL in **ChatGPT’s in-app browser** (or Chrome 149+ with `chrome://flags/#enable-webmcp-testing`).
-2. Copy the yellow prompt on the page. It includes this browser’s locator and last name.
-3. Watch `get_booking` fill the carrier desk.
-4. Let the agent call `submit_claim` **before** anyone signs. It must fail with `APPROVAL_REQUIRED`.
-5. Click **Sign the filing**.
-6. Let the agent file. The claim appears on the desk. The page re-reads FlyRight and stamps verified.
-
-Failure catalog (read-only probes, not this page’s ticket):
-
-| Locator | Last name | What happens |
-| --- | --- | --- |
-| FR2201 | KLEIN | Scheduled — ineligible |
-| FR0999 | BERG | Cancelled but already claimed |
+2. Copy the yellow **goal** (not a tool recipe).
+3. Watch `inspect_counter` fill the passenger or plan on the desk.
+4. Click **File without signature**. It must fail with `APPROVAL_REQUIRED`.
+5. Let the agent prepare the two eligible filings. **Sign the amounts.**
+6. Agent (or **File signed claim**) runs `execute_filing` then `verify_filing`. Expected vs observed must match.
+7. The FR0999 / BERG row stays ineligible. Prepare must fail. Do not file it.
 
 ## Why this is a WebMCP use case
 
-Agents should not scrape an airline desk. The page registers tools with `document.modelContext.registerTool`. Those tools run in the page, mutate FlyRight, and dispatch into the same DOM the human is looking at. Permission is enforced **in `submit_claim`**, not only in a parallel REST path the agent can skip.
+A refund is a two-sided job. Scraping a carrier desk, or calling a hidden API the human cannot see, breaks that. This page registers tools with `document.modelContext.registerTool`. Those tools run in the page, mutate persisted sandbox state, and dispatch into the same DOM the human is looking at. Permission is enforced **inside `execute_filing`**, not only in a parallel REST path the agent can skip.
 
-## What is implemented
+## Tools on `/`
 
-Tools on `/`:
-
-- `get_booking`
-- `get_flight_status`
-- `get_policy`
-- `calculate_compensation`
-- `get_claim_status`
-- `get_chamber`
-- `submit_claim` (human-gated, idempotent, then verified)
-
-Chamber tickets (`AG……`) cannot be filed from `/providers/flyright`. That back door is closed.
+- `list_work_items`
+- `get_work_item`
+- `inspect_counter`
+- `compute_entitlement`
+- `prepare_filing`
+- `request_signature`
+- `execute_filing` (human-gated, idempotent)
+- `verify_filing` (re-read; fail-closed)
 
 ## Run
 
 ```bash
 npm install
-cp .env.example .env.local   # if present; otherwise set env vars
+cp .env.example .env.local
 npm run dev
 ```
 
-Required env: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. See [`docs/11-operations/ENV_SCHEMA.md`](docs/11-operations/ENV_SCHEMA.md).
-## Run
+Required env: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Apply `supabase/migrations/` including `theater_sessions` and `theater_hardening`. See [`docs/11-operations/ENV_SCHEMA.md`](docs/11-operations/ENV_SCHEMA.md).
 
 ```bash
-npm install
-cp .env.example .env.local   # if present; otherwise set env vars
-npm run dev
+npm run preflight
+npm run test:theater
 ```
 
-Required env: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. See [`docs/11-operations/ENV_SCHEMA.md`](docs/11-operations/ENV_SCHEMA.md).
-## Run
-
-```bash
-npm install
-cp .env.example .env.local   # if present; otherwise set env vars
-npm run dev
-```
-
-Required env: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. See [`docs/11-operations/ENV_SCHEMA.md`](docs/11-operations/ENV_SCHEMA.md).
-
-```bash
-npm test
-npm run typecheck
-```
+`GET /api/health/theater` is the demo readiness gate (tables, FR1842 template, FR0999 claim, Streamly template).
 
 ## Paste this on Devpost
 
-**Why WebMCP:** A cancelled flight is a two-sided job. The person owns the signature. The agent owns the lookup and the filing. WebMCP is the only way they share one live page instead of the agent scraping a desk or calling a hidden API.
+**Why WebMCP:** A refund is a two-sided job. The person owns the signature. The agent owns lookup and filing. WebMCP is how they share one live page instead of scraping a desk or calling a hidden API.
 
-**Better UX:** ChatGPT looks up the ticket and the carrier desk fills in. `submit_claim` fails until the human signs. After the agent files, Aegis re-reads FlyRight and stamps verified. That was clumsy when the agent had to guess through forms.
+**Better UX:** The counter fills when the agent inspects. Filing fails until you sign. After file, Aegis re-reads the row and shows expected vs observed.
 
-**Together:** The human cannot file without the agent (or the same gated tool). The agent cannot file without the human. They stay on one URL, one session.
+**Together:** The agent cannot file without you. You should not have to type locators into forms. One URL, one session.
 
-**How we implemented it:** `document.modelContext.registerTool` on `/` for `get_booking`, `get_flight_status`, `get_policy`, `calculate_compensation`, `get_claim_status`, `get_chamber`, and `submit_claim`. Each `execute` hits the live FlyRight sandbox and dispatches into the same DOM. Chamber tickets cannot be filed from the public counter.
+**How we implemented it:** `document.modelContext.registerTool` on `/` for inspect, compute, prepare, request signature, execute, and verify. Each `execute` hits live sandbox tables and updates the same DOM. Already-claimed catalog row FR0999 cannot be prepared. Amounts come from software, not the model.
 
 ## License
 

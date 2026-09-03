@@ -30,9 +30,23 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Aegis Resolution Theater — human signs, agent executes, desk verifies",
+  title: "Aegis — you sign, the desk files, the row must match",
   description:
-    "Three disputes on one page. WebMCP drives real provider sandbox state. Humans sign. The desk verifies by re-reading reality.",
+    "A live dispute desk. WebMCP tools inspect persisted sandbox rows, compute entitlement, and file only after a human signs. Success is a re-read.",
+  metadataBase: new URL("https://aegis-chamber.vercel.app"),
+  openGraph: {
+    title: "Aegis — you sign, the desk files, the row must match",
+    description:
+      "ChatGPT and a person share one refund desk. The agent inspects. You authorize money. The provider row must match.",
+    url: "https://aegis-chamber.vercel.app",
+    siteName: "Aegis",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Aegis — you sign, the desk files, the row must match",
+    description: "A WebMCP resolution desk: inspect, sign, file, verify.",
+  },
 };
 
 export default function RootLayout({

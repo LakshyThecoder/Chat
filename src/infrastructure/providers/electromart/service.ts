@@ -227,9 +227,13 @@ export class ElectroMartProvider {
 
     if (error) {
       if (error.code === "23505") {
-        const replay = await this.getClaimForOrder(order.orderId);
-        if (replay) {
-          return replay;
+        const replayByKey = await this.client
+          .from("electromart_claims")
+          .select("*")
+          .eq("idempotency_key", params.idempotencyKey)
+          .maybeSingle();
+        if (replayByKey.data) {
+          return mapClaim(replayByKey.data);
         }
         throw new ElectroMartConflictError("A warranty claim already exists for this order.");
       }

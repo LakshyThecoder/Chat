@@ -9,7 +9,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:theater": "vitest run tests/integration/theater-demo.integration.test.ts",
+    "preflight": "npm run typecheck && npm run lint && npm run test"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.6",

@@ -2,12 +2,36 @@ import "server-only";
 
 import { createHash, randomBytes } from "crypto";
 import { z } from "zod";
+import { isCatalogBlocked, workItemNarrative } from "@/src/domain/theater/catalog";
+import { TheaterSessionError } from "@/src/domain/theater/errors";
 import {
   assertTheaterExecute,
   deriveTheaterApproval,
   TheaterPermissionError,
 } from "@/src/domain/theater/permission";
+import {
+  assertPrepareAllowed,
+  assertRequestSignatureAllowed,
+  assertSessionNotExpired,
+  decideAction,
+  entitleNextStatus,
+  executeMode,
+  inspectNextStatus,
+  nextActionsFor,
+  prepareAction,
+  requestSignatureAction,
+  sessionIsExpired,
+} from "@/src/domain/theater/state";
+import {
+  getTheaterTool,
+  parseTheaterToolName,
+  parseWorkItemId,
+  theaterToolNameSchema,
+  type TheaterToolName,
+} from "@/src/domain/theater/tools";
 import type {
+  TheaterLastError,
+  TheaterProposal,
   TheaterProviderId,
   TheaterSnapshot,
   TheaterWorkItemIdentity,
@@ -21,20 +45,11 @@ import { createFlyRightProvider } from "@/src/infrastructure/providers/flyright/
 import { createStreamlyProvider } from "@/src/infrastructure/providers/streamly/service";
 import { createElectroMartProvider } from "@/src/infrastructure/providers/electromart/service";
 
+export { TheaterSessionError } from "@/src/domain/theater/errors";
+
 export const THEATER_COOKIE = "aegis_theater";
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
-
-export class TheaterSessionError extends Error {
-  readonly code: string;
-  readonly status: number;
-
-  constructor(code: string, message: string, status: number) {
-    super(message);
-    this.name = "TheaterSessionError";
-    this.code = code;
-    this.status = status;
-  }
-}
+const SESSION_MINT_COOLDOWN_MS = 8_000;
 
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -88,25 +103,22 @@ function asIdentity(value: unknown): TheaterWorkItemIdentity {
   }
 
   if (parsed.data.providerId === "flyright") {
-    const typed = z
+    return z
       .object({ providerId: z.literal("flyright"), locator: z.string().min(3), lastName: z.string().min(1) })
       .parse(parsed.data);
-    return typed;
   }
   if (parsed.data.providerId === "streamly") {
-    const typed = z
+    return z
       .object({
         providerId: z.literal("streamly"),
         subscriptionId: z.string().min(3),
         accountEmail: z.string().email(),
       })
       .parse(parsed.data);
-    return typed;
   }
-  const typed = z
+  return z
     .object({ providerId: z.literal("electromart"), orderId: z.string().min(3), lastName: z.string().min(1) })
     .parse(parsed.data);
-  return typed;
 }
 
 function asDecision(value: unknown): EligibilityDecision | null {
@@ -120,16 +132,46 @@ function asDecision(value: unknown): EligibilityDecision | null {
       reasons: z.array(z.string()),
     })
     .safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+function asProposal(value: unknown): TheaterProposal | null {
+  if (!value) return null;
+  const parsed = z
+    .object({
+      toolName: z.string(),
+      payload: z.record(z.unknown()),
+      amount: z.string().nullable(),
+      currency: z.string(),
+      idempotencyKey: z.string(),
+      expectedVerification: z.record(z.unknown()),
+      version: z.number().int().nonnegative().optional(),
+    })
+    .safeParse(value);
   if (!parsed.success) {
     return null;
   }
-  return parsed.data;
+  return { ...parsed.data, version: parsed.data.version ?? 1 };
+}
+
+function asLastError(value: unknown): TheaterLastError | null {
+  if (!value) return null;
+  const parsed = z
+    .object({
+      code: z.string(),
+      message: z.string(),
+      at: z.string(),
+    })
+    .safeParse(value);
+  return parsed.success ? parsed.data : null;
 }
 
 interface SessionRow {
   id: string;
   token_hash: string;
   expires_at: string;
+  created_at?: string;
+  superseded_at?: string | null;
 }
 
 interface WorkItemRow {
@@ -150,6 +192,10 @@ interface WorkItemRow {
   idempotency_key: string | null;
   last_mutation_id: string | null;
   last_mutation_status: string | null;
+  last_error: unknown | null;
+  last_attempt_at: string | null;
+  attempt_count: number | null;
+  proposal_version: number | null;
 }
 
 async function loadSessionRow(token: string): Promise<SessionRow> {
@@ -170,6 +216,8 @@ async function loadSessionRow(token: string): Promise<SessionRow> {
     id: String(data.id),
     token_hash: String(data.token_hash),
     expires_at: String(data.expires_at),
+    created_at: data.created_at ? String(data.created_at) : undefined,
+    superseded_at: data.superseded_at ? String(data.superseded_at) : null,
   };
 }
 
@@ -191,10 +239,12 @@ function mapItem(row: WorkItemRow): TheaterWorkItemSnapshot {
   const identity = asIdentity(row.identity);
   const status = asStatus(row.status);
   const entitlement = asDecision(row.entitlement);
-  const proposal = row.proposal ? (row.proposal as TheaterWorkItemSnapshot["proposal"]) : null;
+  const proposal = asProposal(row.proposal);
   const verification = row.verification ? (row.verification as TheaterWorkItemSnapshot["verification"]) : null;
-
+  const catalogBlocked = isCatalogBlocked(identity);
+  const narrative = workItemNarrative(identity);
   const approvedAmount = row.approved_amount != null ? normalizeSqlMoney(row.approved_amount) : null;
+  const lastMutationId = row.last_mutation_id;
 
   return {
     id: row.id,
@@ -202,6 +252,9 @@ function mapItem(row: WorkItemRow): TheaterWorkItemSnapshot {
     title: row.title,
     identity,
     status,
+    catalogBlocked,
+    problem: narrative.problem,
+    source: narrative.source,
     counter: (row.counter as Record<string, unknown> | null) ?? null,
     entitlement,
     proposal,
@@ -213,6 +266,16 @@ function mapItem(row: WorkItemRow): TheaterWorkItemSnapshot {
       deniedAt: row.denied_at,
     },
     verification,
+    lastError: asLastError(row.last_error),
+    attemptCount: Number(row.attempt_count ?? 0),
+    lastMutationId,
+    lastMutationStatus: row.last_mutation_status,
+    nextActions: nextActionsFor({
+      status,
+      catalogBlocked,
+      eligible: entitlement ? entitlement.outcome === "eligible" : null,
+      hasMutation: Boolean(lastMutationId),
+    }),
   };
 }
 
@@ -221,81 +284,175 @@ async function snapshotFrom(session: SessionRow): Promise<TheaterSnapshot> {
   return {
     sessionId: session.id,
     expiresAt: session.expires_at,
+    expired: sessionIsExpired(new Date(), session.expires_at) || Boolean(session.superseded_at),
     items: items.map(mapItem),
   };
 }
 
-export async function createTheaterSession(): Promise<{ token: string; snapshot: TheaterSnapshot }> {
+async function recordAudit(params: {
+  sessionId: string;
+  workItemId?: string | null;
+  eventType: string;
+  payload?: Record<string, unknown>;
+}) {
+  const client = createAdminSupabaseClient();
+  const { error } = await client.from("theater_audit_events").insert({
+    session_id: params.sessionId,
+    work_item_id: params.workItemId ?? null,
+    event_type: params.eventType,
+    payload: params.payload ?? {},
+  });
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+async function supersedeSession(token: string): Promise<SessionRow | null> {
+  try {
+    const session = await loadSessionRow(token);
+    const now = new Date().toISOString();
+    const { error } = await createAdminSupabaseClient()
+      .from("theater_sessions")
+      .update({ superseded_at: now, expires_at: now })
+      .eq("id", session.id);
+    if (error) {
+      throw new Error(error.message);
+    }
+    return session;
+  } catch (error) {
+    if (error instanceof TheaterSessionError && error.code === "THEATER_NOT_FOUND") {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export async function createTheaterSession(options?: {
+  previousToken?: string | null;
+}): Promise<{ token: string; snapshot: TheaterSnapshot }> {
+  if (options?.previousToken) {
+    try {
+      const previous = await loadSessionRow(options.previousToken);
+      if (previous.created_at) {
+        const ageMs = Date.now() - new Date(previous.created_at).getTime();
+        if (ageMs >= 0 && ageMs < SESSION_MINT_COOLDOWN_MS) {
+          throw new TheaterSessionError(
+            "RATE_LIMITED",
+            "Wait a moment before issuing another desk.",
+            429,
+          );
+        }
+      }
+      await supersedeSession(options.previousToken);
+    } catch (error) {
+      if (error instanceof TheaterSessionError && error.code === "THEATER_NOT_FOUND") {
+        // First visit or cookie already invalid — mint a new desk.
+      } else {
+        throw error;
+      }
+    }
+  }
+
   const flyright = createFlyRightProvider();
   const streamly = createStreamlyProvider();
-  const electromart = createElectroMartProvider();
 
-  const booking = await flyright.issueChamberTicket();
-  const subscription = await streamly.issueTheaterSubscription();
-  const order = await electromart.issueTheaterOrder();
+  let booking: { locator: string; lastName: string } | null = null;
+  let subscription: { subscriptionId: string; accountEmail: string } | null = null;
+  let persisted = false;
 
-  const token = mintToken();
-  const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
+  try {
+    booking = await flyright.issueChamberTicket();
+    subscription = await streamly.issueTheaterSubscription();
 
-  const client = createAdminSupabaseClient();
-  const { data, error } = await client
-    .from("theater_sessions")
-    .insert({
-      token_hash: hashToken(token),
-      expires_at: expiresAt,
-    })
-    .select("*")
-    .single();
+    const token = mintToken();
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
+    const client = createAdminSupabaseClient();
+    const { data, error } = await client
+      .from("theater_sessions")
+      .insert({
+        token_hash: hashToken(token),
+        expires_at: expiresAt,
+      })
+      .select("*")
+      .single();
 
-  if (error || !data) {
-    throw new Error(error?.message ?? "Could not create theater session.");
-  }
+    if (error || !data) {
+      throw new Error(error?.message ?? "Could not create theater session.");
+    }
 
-  const session: SessionRow = {
-    id: String(data.id),
-    token_hash: String(data.token_hash),
-    expires_at: String(data.expires_at),
-  };
+    const session: SessionRow = {
+      id: String(data.id),
+      token_hash: String(data.token_hash),
+      expires_at: String(data.expires_at),
+      created_at: data.created_at ? String(data.created_at) : undefined,
+    };
 
-  const itemsToInsert = [
-    {
-      session_id: session.id,
-      provider_id: "flyright",
-      title: "Cancelled flight refund",
-      identity: { providerId: "flyright", locator: booking.locator, lastName: booking.lastName },
-      status: "UNINSPECTED",
-    },
-    {
-      session_id: session.id,
-      provider_id: "streamly",
-      title: "Billed-after-cancel refund",
-      identity: {
-        providerId: "streamly",
-        subscriptionId: subscription.subscriptionId,
-        accountEmail: subscription.accountEmail,
+    const itemsToInsert = [
+      {
+        session_id: session.id,
+        provider_id: "flyright",
+        title: "Cancelled flight refund",
+        identity: { providerId: "flyright", locator: booking.locator, lastName: booking.lastName },
+        status: "UNINSPECTED",
       },
-      status: "UNINSPECTED",
-    },
-    {
-      session_id: session.id,
-      provider_id: "electromart",
-      title: "In-warranty defect claim",
-      identity: { providerId: "electromart", orderId: order.orderId, lastName: order.lastName },
-      status: "UNINSPECTED",
-    },
-  ];
+      {
+        session_id: session.id,
+        provider_id: "streamly",
+        title: "Billed-after-cancel refund",
+        identity: {
+          providerId: "streamly",
+          subscriptionId: subscription.subscriptionId,
+          accountEmail: subscription.accountEmail,
+        },
+        status: "UNINSPECTED",
+      },
+      {
+        session_id: session.id,
+        provider_id: "flyright",
+        title: "Already claimed — must not file",
+        identity: { providerId: "flyright", locator: "FR0999", lastName: "BERG" },
+        status: "UNINSPECTED",
+      },
+    ];
 
-  const { error: itemError } = await client.from("theater_work_items").insert(itemsToInsert);
-  if (itemError) {
-    throw new Error(itemError.message);
+    const { error: itemError } = await client.from("theater_work_items").insert(itemsToInsert);
+    if (itemError) {
+      await client.from("theater_sessions").delete().eq("id", session.id);
+      throw new Error(itemError.message);
+    }
+    persisted = true;
+
+    await recordAudit({
+      sessionId: session.id,
+      eventType: "session_created",
+      payload: {
+        flyrightLocator: booking.locator,
+        streamlySubscriptionId: subscription.subscriptionId,
+      },
+    });
+
+    return { token, snapshot: await snapshotFrom(session) };
+  } catch (error) {
+    if (!persisted) {
+      const client = createAdminSupabaseClient();
+      if (booking) {
+        await client.from("flyright_bookings").delete().eq("locator", booking.locator);
+      }
+      if (subscription) {
+        await client.from("streamly_subscriptions").delete().eq("subscription_id", subscription.subscriptionId);
+      }
+    }
+    throw error;
   }
-
-  return { token, snapshot: await snapshotFrom(session) };
 }
 
 export async function getTheaterSnapshot(token: string): Promise<TheaterSnapshot> {
   const session = await loadSessionRow(token);
-  return snapshotFrom(session);
+  const snapshot = await snapshotFrom(session);
+  if (snapshot.expired) {
+    throw new TheaterSessionError("SESSION_EXPIRED", "This theater session has expired. Issue a fresh desk.", 409);
+  }
+  return snapshot;
 }
 
 export function theaterCookieOptions() {
@@ -314,31 +471,21 @@ export async function decideTheaterWorkItem(params: {
   decision: "approved" | "denied";
 }): Promise<TheaterSnapshot> {
   const session = await loadSessionRow(params.token);
-  if (new Date() > new Date(session.expires_at)) {
-    throw new TheaterSessionError("EXPIRED", "This theater session has expired. Issue a fresh session.", 409);
+  assertSessionNotExpired(new Date(), session.expires_at);
+
+  const row = await loadItemOrThrow({ sessionId: session.id, workItemId: params.workItemId });
+  const proposal = asProposal(row.proposal);
+  const action = decideAction({
+    status: asStatus(row.status),
+    hasProposal: Boolean(proposal?.amount && proposal.currency),
+    decision: params.decision,
+  });
+
+  if (action === "replay") {
+    return snapshotFrom(session);
   }
 
   const client = createAdminSupabaseClient();
-  const { data: item, error } = await client
-    .from("theater_work_items")
-    .select("*")
-    .eq("id", params.workItemId)
-    .eq("session_id", session.id)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-  if (!item) {
-    throw new TheaterSessionError("WORK_ITEM_NOT_FOUND", "Work item not found.", 404);
-  }
-
-  const row = item as unknown as WorkItemRow;
-  const proposal = row.proposal as TheaterWorkItemSnapshot["proposal"] | null;
-  if (!proposal || !proposal.amount || !proposal.currency) {
-    throw new TheaterSessionError("NOT_PREPARED", "This filing is not prepared yet.", 409);
-  }
-
   if (params.decision === "denied") {
     const { error: updateError } = await client
       .from("theater_work_items")
@@ -350,38 +497,55 @@ export async function decideTheaterWorkItem(params: {
         status: "DENIED",
       })
       .eq("id", row.id)
-      .eq("session_id", session.id);
+      .eq("session_id", session.id)
+      .eq("status", "AWAITING_SIGNATURE");
     if (updateError) {
       throw new Error(updateError.message);
     }
-    return snapshotFrom(session);
+  } else {
+    if (!proposal?.amount || !proposal.currency) {
+      throw new TheaterSessionError("NOT_PREPARED", "This filing is not prepared yet.", 409);
+    }
+    const { error: approveError } = await client
+      .from("theater_work_items")
+      .update({
+        approved_at: new Date().toISOString(),
+        denied_at: null,
+        approved_amount: proposal.amount,
+        approved_currency: proposal.currency,
+        status: "APPROVED",
+      })
+      .eq("id", row.id)
+      .eq("session_id", session.id)
+      .eq("status", "AWAITING_SIGNATURE");
+    if (approveError) {
+      throw new Error(approveError.message);
+    }
   }
 
-  const { error: approveError } = await client
-    .from("theater_work_items")
-    .update({
-      approved_at: new Date().toISOString(),
-      denied_at: null,
-      approved_amount: proposal.amount,
-      approved_currency: proposal.currency,
-      status: "APPROVED",
-    })
-    .eq("id", row.id)
-    .eq("session_id", session.id);
-
-  if (approveError) {
-    throw new Error(approveError.message);
-  }
+  await recordAudit({
+    sessionId: session.id,
+    workItemId: row.id,
+    eventType: params.decision === "approved" ? "signature_approved" : "signature_denied",
+    payload: {
+      amount: proposal?.amount ?? null,
+      currency: proposal?.currency ?? null,
+    },
+  });
 
   return snapshotFrom(session);
 }
 
 async function loadItemOrThrow(params: { sessionId: string; workItemId: string }): Promise<WorkItemRow> {
+  const parsedId = z.string().uuid().safeParse(params.workItemId);
+  if (!parsedId.success) {
+    throw new TheaterSessionError("INVALID_ARGUMENT", "workItemId must be a UUID.", 400);
+  }
   const client = createAdminSupabaseClient();
   const { data, error } = await client
     .from("theater_work_items")
     .select("*")
-    .eq("id", params.workItemId)
+    .eq("id", parsedId.data)
     .eq("session_id", params.sessionId)
     .maybeSingle();
   if (error) {
@@ -393,62 +557,146 @@ async function loadItemOrThrow(params: { sessionId: string; workItemId: string }
   return data as unknown as WorkItemRow;
 }
 
+function envelope(params: {
+  tool: TheaterToolName;
+  snapshot: TheaterSnapshot;
+  extra: Record<string, unknown>;
+  item?: TheaterWorkItemSnapshot | null;
+}): Record<string, unknown> {
+  const definition = getTheaterTool(params.tool);
+  const item =
+    params.item ??
+    (typeof params.extra.workItemId === "string"
+      ? params.snapshot.items.find((entry) => entry.id === params.extra.workItemId)
+      : undefined);
+  return {
+    tool: params.tool,
+    sideEffect: definition.sideEffect,
+    idempotent: definition.idempotent,
+    nextActions: item?.nextActions ?? params.snapshot.items.flatMap((entry) => entry.nextActions).slice(0, 8),
+    workItem: item ?? null,
+    provenance: item
+      ? {
+          workItemId: item.id,
+          providerId: item.providerId,
+          identity: item.identity,
+          source: item.source,
+          catalogBlocked: item.catalogBlocked,
+        }
+      : { sessionId: params.snapshot.sessionId, itemCount: params.snapshot.items.length },
+    ...params.extra,
+  };
+}
+
 export async function executeTheaterTool(params: {
   token: string;
   tool: string;
   input: Record<string, unknown>;
 }): Promise<{ result: Record<string, unknown>; snapshot: TheaterSnapshot }> {
   const session = await loadSessionRow(params.token);
-  const held = await snapshotFrom(session);
-  const tool = params.tool;
+  assertSessionNotExpired(new Date(), session.expires_at);
+
+  const toolParsed = theaterToolNameSchema.safeParse(params.tool);
+  if (!toolParsed.success) {
+    throw new TheaterSessionError("UNKNOWN_TOOL", `Unknown theater tool: ${params.tool}`, 400);
+  }
+  const tool = parseTheaterToolName(toolParsed.data);
+  const definition = getTheaterTool(tool);
   const input = params.input;
+  const workItemId = definition.requiresWorkItemId ? parseWorkItemId(input) : "";
 
   switch (tool) {
     case "list_work_items": {
-      return { result: { items: held.items }, snapshot: held };
+      const snapshot = await snapshotFrom(session);
+      return {
+        result: envelope({
+          tool,
+          snapshot,
+          extra: {
+            items: snapshot.items.map((item) => ({
+              id: item.id,
+              title: item.title,
+              providerId: item.providerId,
+              status: item.status,
+              catalogBlocked: item.catalogBlocked,
+              problem: item.problem,
+              nextActions: item.nextActions,
+              amount: item.proposal?.amount ?? item.entitlement?.amount ?? null,
+            })),
+          },
+        }),
+        snapshot,
+      };
     }
     case "get_work_item": {
-      const workItemId = String(input.workItemId ?? "");
       const row = await loadItemOrThrow({ sessionId: session.id, workItemId });
-      return { result: { item: mapItem(row) }, snapshot: await snapshotFrom(session) };
+      const snapshot = await snapshotFrom(session);
+      const item = mapItem(row);
+      return { result: envelope({ tool, snapshot, item, extra: { item } }), snapshot };
     }
     case "inspect_counter": {
-      const workItemId = String(input.workItemId ?? "");
       const row = await loadItemOrThrow({ sessionId: session.id, workItemId });
       const providerId = asProviderId(row.provider_id);
       const identity = asIdentity(row.identity);
-
       const counter = await inspectProvider(providerId, identity);
+      const nextStatus = inspectNextStatus(asStatus(row.status));
       await createAdminSupabaseClient()
         .from("theater_work_items")
-        .update({ counter, status: row.status === "UNINSPECTED" ? "INSPECTED" : row.status })
+        .update({ counter, status: nextStatus })
         .eq("id", row.id)
         .eq("session_id", session.id);
-
-      return { result: { counter }, snapshot: await snapshotFrom(session) };
+      await recordAudit({
+        sessionId: session.id,
+        workItemId: row.id,
+        eventType: "inspect_counter",
+        payload: { providerId },
+      });
+      const snapshot = await snapshotFrom(session);
+      const item = snapshot.items.find((entry) => entry.id === row.id) ?? null;
+      return { result: envelope({ tool, snapshot, item, extra: { counter } }), snapshot };
     }
     case "compute_entitlement": {
-      const workItemId = String(input.workItemId ?? "");
       const row = await loadItemOrThrow({ sessionId: session.id, workItemId });
       const providerId = asProviderId(row.provider_id);
       const identity = asIdentity(row.identity);
-
       const entitlement = await computeEntitlement(providerId, identity);
+      const nextStatus = entitleNextStatus(asStatus(row.status));
       await createAdminSupabaseClient()
         .from("theater_work_items")
-        .update({ entitlement, status: "ENTITLED" })
+        .update({ entitlement, status: nextStatus })
         .eq("id", row.id)
         .eq("session_id", session.id);
-
-      return { result: { entitlement }, snapshot: await snapshotFrom(session) };
+      await recordAudit({
+        sessionId: session.id,
+        workItemId: row.id,
+        eventType: "compute_entitlement",
+        payload: { outcome: entitlement.outcome, amount: entitlement.amount },
+      });
+      const snapshot = await snapshotFrom(session);
+      const item = snapshot.items.find((entry) => entry.id === row.id) ?? null;
+      return { result: envelope({ tool, snapshot, item, extra: { entitlement } }), snapshot };
     }
     case "prepare_filing": {
-      const workItemId = String(input.workItemId ?? "");
       const row = await loadItemOrThrow({ sessionId: session.id, workItemId });
+      const status = asStatus(row.status);
+      assertPrepareAllowed(status);
+      if (prepareAction(status) === "replay") {
+        const snapshot = await snapshotFrom(session);
+        const item = snapshot.items.find((entry) => entry.id === row.id) ?? null;
+        return {
+          result: envelope({
+            tool,
+            snapshot,
+            item,
+            extra: { proposal: item?.proposal ?? asProposal(row.proposal), replay: true },
+          }),
+          snapshot,
+        };
+      }
+
       const providerId = asProviderId(row.provider_id);
       const identity = asIdentity(row.identity);
-
-      const entitlement = asDecision(row.entitlement);
+      const entitlement = asDecision(row.entitlement) ?? (await computeEntitlement(providerId, identity));
       if (!entitlement || entitlement.outcome !== "eligible" || !entitlement.amount) {
         throw new TheaterSessionError(
           "NOT_ELIGIBLE",
@@ -457,6 +705,7 @@ export async function executeTheaterTool(params: {
         );
       }
 
+      const nextVersion = Number(row.proposal_version ?? 0) + 1;
       const { proposal, idempotencyKey } = buildProposal({
         sessionId: session.id,
         workItemId: row.id,
@@ -464,50 +713,67 @@ export async function executeTheaterTool(params: {
         identity,
         amount: entitlement.amount,
         currency: entitlement.currency,
+        version: nextVersion,
       });
 
       await createAdminSupabaseClient()
         .from("theater_work_items")
         .update({
+          entitlement,
           proposal,
           idempotency_key: idempotencyKey,
+          proposal_version: nextVersion,
           status: "PREPARED",
-          approved_at: null,
-          denied_at: null,
-          approved_amount: null,
-          approved_currency: null,
         })
         .eq("id", row.id)
-        .eq("session_id", session.id);
+        .eq("session_id", session.id)
+        .in("status", ["UNINSPECTED", "INSPECTED", "ENTITLED"]);
 
-      return { result: { proposal }, snapshot: await snapshotFrom(session) };
+      await recordAudit({
+        sessionId: session.id,
+        workItemId: row.id,
+        eventType: "prepare_filing",
+        payload: { amount: proposal.amount, version: nextVersion },
+      });
+
+      const snapshot = await snapshotFrom(session);
+      const item = snapshot.items.find((entry) => entry.id === row.id) ?? null;
+      return { result: envelope({ tool, snapshot, item, extra: { proposal } }), snapshot };
     }
     case "request_signature": {
-      const workItemId = String(input.workItemId ?? "");
       const row = await loadItemOrThrow({ sessionId: session.id, workItemId });
-      if (!row.proposal) {
+      const status = asStatus(row.status);
+      assertRequestSignatureAllowed(status);
+      if (requestSignatureAction(status) === "replay") {
+        const snapshot = await snapshotFrom(session);
+        const item = snapshot.items.find((entry) => entry.id === row.id) ?? null;
+        return { result: envelope({ tool, snapshot, item, extra: { replay: true } }), snapshot };
+      }
+      if (!asProposal(row.proposal)) {
         throw new TheaterSessionError("NOT_PREPARED", "Prepare the filing before requesting a signature.", 409);
       }
       await createAdminSupabaseClient()
         .from("theater_work_items")
         .update({
           status: "AWAITING_SIGNATURE",
-          approved_at: null,
-          denied_at: null,
-          approved_amount: null,
-          approved_currency: null,
         })
         .eq("id", row.id)
-        .eq("session_id", session.id);
-
-      return { result: { ok: true }, snapshot: await snapshotFrom(session) };
+        .eq("session_id", session.id)
+        .eq("status", "PREPARED");
+      await recordAudit({
+        sessionId: session.id,
+        workItemId: row.id,
+        eventType: "request_signature",
+      });
+      const snapshot = await snapshotFrom(session);
+      const item = snapshot.items.find((entry) => entry.id === row.id) ?? null;
+      return { result: envelope({ tool, snapshot, item, extra: { awaitingSignature: true } }), snapshot };
     }
     case "execute_filing": {
-      const workItemId = String(input.workItemId ?? "");
       const row = await loadItemOrThrow({ sessionId: session.id, workItemId });
       const providerId = asProviderId(row.provider_id);
       const identity = asIdentity(row.identity);
-      const proposal = row.proposal as TheaterWorkItemSnapshot["proposal"] | null;
+      const proposal = asProposal(row.proposal);
       const approvedAmount = row.approved_amount != null ? normalizeSqlMoney(row.approved_amount) : null;
 
       assertTheaterExecute({
@@ -530,34 +796,127 @@ export async function executeTheaterTool(params: {
         throw new TheaterSessionError("MISSING_IDEMPOTENCY", "Missing idempotency key.", 500);
       }
 
-      const mutation = await executeProviderMutation({
-        providerId,
-        identity,
-        amount: proposal.amount,
-        currency: proposal.currency,
-        idempotencyKey,
-        theaterSessionId: session.id,
-        workItemId: row.id,
+      const mode = executeMode({
+        status: asStatus(row.status),
+        lastMutationId: row.last_mutation_id,
       });
 
+      if (mode === "replay" && row.last_mutation_id) {
+        const snapshot = await snapshotFrom(session);
+        const item = snapshot.items.find((entry) => entry.id === row.id) ?? null;
+        return {
+          result: envelope({
+            tool,
+            snapshot,
+            item,
+            extra: {
+              mutation: { id: row.last_mutation_id, status: row.last_mutation_status },
+              replay: true,
+            },
+          }),
+          snapshot,
+        };
+      }
+
+      const attemptCount = Number(row.attempt_count ?? 0) + 1;
       await createAdminSupabaseClient()
+        .from("theater_work_items")
+        .update({
+          last_attempt_at: new Date().toISOString(),
+          attempt_count: attemptCount,
+        })
+        .eq("id", row.id)
+        .eq("session_id", session.id);
+
+      let mutation: { id: string; status: string };
+      try {
+        mutation = await executeProviderMutation({
+          providerId,
+          identity,
+          amount: proposal.amount,
+          currency: proposal.currency,
+          idempotencyKey,
+        });
+      } catch (error) {
+        const lastError: TheaterLastError = {
+          code: error instanceof TheaterSessionError || error instanceof TheaterPermissionError
+            ? error.code
+            : ((error as { code?: string }).code ?? "TOOL_FAILED"),
+          message: error instanceof Error ? error.message : "Provider mutation failed.",
+          at: new Date().toISOString(),
+        };
+        await createAdminSupabaseClient()
+          .from("theater_work_items")
+          .update({
+            status: "FAILED",
+            last_error: lastError,
+          })
+          .eq("id", row.id)
+          .eq("session_id", session.id)
+          .in("status", ["APPROVED", "FAILED"]);
+        await recordAudit({
+          sessionId: session.id,
+          workItemId: row.id,
+          eventType: "execute_filing_failed",
+          payload: { code: lastError.code },
+        });
+        throw error;
+      }
+
+      const { data: executed, error: executeUpdateError } = await createAdminSupabaseClient()
         .from("theater_work_items")
         .update({
           status: "EXECUTED",
           last_mutation_id: mutation.id,
           last_mutation_status: mutation.status,
+          last_error: null,
         })
         .eq("id", row.id)
-        .eq("session_id", session.id);
+        .eq("session_id", session.id)
+        .in("status", ["APPROVED", "FAILED"])
+        .select("id")
+        .maybeSingle();
 
-      return { result: { mutation }, snapshot: await snapshotFrom(session) };
+      if (executeUpdateError) {
+        throw new Error(executeUpdateError.message);
+      }
+
+      if (!executed) {
+        const latest = await loadItemOrThrow({ sessionId: session.id, workItemId: row.id });
+        if (latest.last_mutation_id) {
+          const snapshot = await snapshotFrom(session);
+          const item = snapshot.items.find((entry) => entry.id === row.id) ?? null;
+          return {
+            result: envelope({
+              tool,
+              snapshot,
+              item,
+              extra: {
+                mutation: { id: latest.last_mutation_id, status: latest.last_mutation_status },
+                replay: true,
+              },
+            }),
+            snapshot,
+          };
+        }
+      }
+
+      await recordAudit({
+        sessionId: session.id,
+        workItemId: row.id,
+        eventType: "execute_filing",
+        payload: { mutationId: mutation.id, status: mutation.status },
+      });
+
+      const snapshot = await snapshotFrom(session);
+      const item = snapshot.items.find((entry) => entry.id === row.id) ?? null;
+      return { result: envelope({ tool, snapshot, item, extra: { mutation } }), snapshot };
     }
     case "verify_filing": {
-      const workItemId = String(input.workItemId ?? "");
       const row = await loadItemOrThrow({ sessionId: session.id, workItemId });
       const providerId = asProviderId(row.provider_id);
       const identity = asIdentity(row.identity);
-      const proposal = row.proposal as TheaterWorkItemSnapshot["proposal"] | null;
+      const proposal = asProposal(row.proposal);
       const mutationId = row.last_mutation_id;
 
       if (!proposal || !proposal.amount || !proposal.currency) {
@@ -573,6 +932,7 @@ export async function executeTheaterTool(params: {
         mutationId,
         amount: proposal.amount,
         currency: proposal.currency,
+        expected: proposal.expectedVerification,
       });
 
       await createAdminSupabaseClient()
@@ -584,10 +944,21 @@ export async function executeTheaterTool(params: {
         .eq("id", row.id)
         .eq("session_id", session.id);
 
-      return { result: { verification }, snapshot: await snapshotFrom(session) };
+      await recordAudit({
+        sessionId: session.id,
+        workItemId: row.id,
+        eventType: verification.matched ? "verify_filing_matched" : "verify_filing_mismatch",
+        payload: { matched: verification.matched, mutationId },
+      });
+
+      const snapshot = await snapshotFrom(session);
+      const item = snapshot.items.find((entry) => entry.id === row.id) ?? null;
+      return { result: envelope({ tool, snapshot, item, extra: { verification } }), snapshot };
     }
-    default:
-      throw new TheaterSessionError("UNKNOWN_TOOL", `Unknown theater tool: ${tool}`, 400);
+    default: {
+      const exhaustive: never = tool;
+      throw new TheaterSessionError("UNKNOWN_TOOL", `Unknown theater tool: ${exhaustive}`, 400);
+    }
   }
 }
 
@@ -613,7 +984,10 @@ async function inspectProvider(providerId: TheaterProviderId, identity: TheaterW
   return { order, claim };
 }
 
-async function computeEntitlement(providerId: TheaterProviderId, identity: TheaterWorkItemIdentity): Promise<EligibilityDecision> {
+async function computeEntitlement(
+  providerId: TheaterProviderId,
+  identity: TheaterWorkItemIdentity,
+): Promise<EligibilityDecision> {
   if (providerId === "flyright" && identity.providerId === "flyright") {
     const flyright = createFlyRightProvider();
     const compensation = await flyright.calculateCompensation(identity.locator, identity.lastName);
@@ -657,7 +1031,8 @@ function buildProposal(params: {
   identity: TheaterWorkItemIdentity;
   amount: string;
   currency: string;
-}): { proposal: TheaterWorkItemSnapshot["proposal"]; idempotencyKey: string } {
+  version: number;
+}): { proposal: TheaterProposal; idempotencyKey: string } {
   const idempotencyKey = `theater:${params.sessionId}:${params.workItemId}:${params.providerId}`;
 
   if (params.providerId === "flyright" && params.identity.providerId === "flyright") {
@@ -675,6 +1050,7 @@ function buildProposal(params: {
         amount: params.amount,
         currency: params.currency,
         idempotencyKey,
+        version: params.version,
         expectedVerification: {
           locator: params.identity.locator,
           amount: params.amount,
@@ -699,6 +1075,7 @@ function buildProposal(params: {
         amount: params.amount,
         currency: params.currency,
         idempotencyKey,
+        version: params.version,
         expectedVerification: {
           subscriptionId: params.identity.subscriptionId,
           amount: params.amount,
@@ -726,6 +1103,7 @@ function buildProposal(params: {
       amount: params.amount,
       currency: params.currency,
       idempotencyKey,
+      version: params.version,
       expectedVerification: {
         orderId: params.identity.orderId,
         amount: params.amount,
@@ -741,8 +1119,6 @@ async function executeProviderMutation(params: {
   amount: string;
   currency: string;
   idempotencyKey: string;
-  theaterSessionId: string;
-  workItemId: string;
 }): Promise<{ id: string; status: string }> {
   if (params.providerId === "flyright" && params.identity.providerId === "flyright") {
     const flyright = createFlyRightProvider();
@@ -752,7 +1128,6 @@ async function executeProviderMutation(params: {
       amount: params.amount,
       currency: params.currency,
       idempotencyKey: params.idempotencyKey,
-      aegisCaseId: `theater:${params.theaterSessionId}:${params.workItemId}`,
     });
     return { id: claim.id, status: claim.status };
   }
@@ -765,7 +1140,6 @@ async function executeProviderMutation(params: {
       amount: params.amount,
       currency: params.currency,
       idempotencyKey: params.idempotencyKey,
-      aegisCaseId: `theater:${params.theaterSessionId}:${params.workItemId}`,
     });
     return { id: refund.id, status: refund.status };
   }
@@ -780,7 +1154,6 @@ async function executeProviderMutation(params: {
     amount: params.amount,
     currency: params.currency,
     idempotencyKey: params.idempotencyKey,
-    aegisCaseId: `theater:${params.theaterSessionId}:${params.workItemId}`,
   });
   return { id: claim.id, status: claim.status };
 }
@@ -791,17 +1164,26 @@ async function verifyProviderMutation(params: {
   mutationId: string;
   amount: string;
   currency: string;
+  expected: Record<string, unknown>;
 }): Promise<NonNullable<TheaterWorkItemSnapshot["verification"]>> {
   if (params.providerId === "flyright" && params.identity.providerId === "flyright") {
     const flyright = createFlyRightProvider();
     const observed = await flyright.getClaimStatus(params.mutationId);
+    const expectedLocator = String(params.expected.locator ?? params.identity.locator);
+    const expectedAmount = String(params.expected.amount ?? params.amount);
+    const expectedCurrency = String(params.expected.currency ?? params.currency);
     const matched =
       observed.id === params.mutationId &&
-      observed.locator === params.identity.locator &&
-      observed.amount === params.amount &&
-      observed.currency === params.currency;
+      observed.locator === expectedLocator &&
+      observed.amount === expectedAmount &&
+      observed.currency === expectedCurrency;
     return {
-      expected: { claimId: params.mutationId, locator: params.identity.locator, amount: params.amount, currency: params.currency },
+      expected: {
+        claimId: params.mutationId,
+        locator: expectedLocator,
+        amount: expectedAmount,
+        currency: expectedCurrency,
+      },
       observed: { ...observed },
       matched,
     };
@@ -810,13 +1192,21 @@ async function verifyProviderMutation(params: {
   if (params.providerId === "streamly" && params.identity.providerId === "streamly") {
     const streamly = createStreamlyProvider();
     const observed = await streamly.getRefundStatus(params.mutationId);
+    const expectedSubscriptionId = String(params.expected.subscriptionId ?? params.identity.subscriptionId);
+    const expectedAmount = String(params.expected.amount ?? params.amount);
+    const expectedCurrency = String(params.expected.currency ?? params.currency);
     const matched =
       observed.id === params.mutationId &&
-      observed.subscriptionId === params.identity.subscriptionId &&
-      observed.amount === params.amount &&
-      observed.currency === params.currency;
+      observed.subscriptionId === expectedSubscriptionId &&
+      observed.amount === expectedAmount &&
+      observed.currency === expectedCurrency;
     return {
-      expected: { refundId: params.mutationId, subscriptionId: params.identity.subscriptionId, amount: params.amount, currency: params.currency },
+      expected: {
+        refundId: params.mutationId,
+        subscriptionId: expectedSubscriptionId,
+        amount: expectedAmount,
+        currency: expectedCurrency,
+      },
       observed: { ...observed },
       matched,
     };
@@ -827,17 +1217,24 @@ async function verifyProviderMutation(params: {
     throw new TheaterSessionError("IDENTITY_MISMATCH", "Identity does not match the work item provider.", 500);
   }
   const observed = await electromart.getClaimStatus(params.mutationId);
+  const expectedOrderId = String(params.expected.orderId ?? params.identity.orderId);
+  const expectedAmount = String(params.expected.amount ?? params.amount);
+  const expectedCurrency = String(params.expected.currency ?? params.currency);
   const matched =
     observed.id === params.mutationId &&
-    observed.orderId === params.identity.orderId &&
-    observed.amount === params.amount &&
-    observed.currency === params.currency;
+    observed.orderId === expectedOrderId &&
+    observed.amount === expectedAmount &&
+    observed.currency === expectedCurrency;
   return {
-    expected: { claimId: params.mutationId, orderId: params.identity.orderId, amount: params.amount, currency: params.currency },
+    expected: {
+      claimId: params.mutationId,
+      orderId: expectedOrderId,
+      amount: expectedAmount,
+      currency: expectedCurrency,
+    },
     observed: { ...observed },
     matched,
   };
 }
 
 export { TheaterPermissionError };
-
