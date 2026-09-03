@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { ledgerCopy } from "@/src/domain/theater/ledger";
-import { registerTheaterTools } from "@/components/theater/register-theater-tools";
+import {
+  normalizeWebMcpTools,
+  registerTheaterTools,
+} from "@/components/theater/register-theater-tools";
 
 describe("theater ledger and registration", () => {
   it("translates permission failures into human copy", () => {
@@ -13,28 +16,49 @@ describe("theater ledger and registration", () => {
     expect(ledgerCopy({ name: "verify_filing", ok: true }).headline).toMatch(/re-read/i);
   });
 
-  it("does not duplicate tools on remount and refreshes execute handlers", async () => {
-    const registered: Array<{
-      name: string;
-      description: string;
-      inputSchema: Record<string, unknown>;
-      execute: (input: Record<string, unknown>) => Promise<unknown>;
-    }> = [];
-    const context = {
-      registerTool: (tool: (typeof registered)[number]) => {
-        registered.push(tool);
-      },
-      getTools: () => registered,
+  it("normalizes non-array getTools() host shapes without throwing", () => {
+    const tool = {
+      name: "begin_resolution",
+      description: "x",
+      inputSchema: {},
+      execute: async () => ({}),
     };
-    let generation = 0;
+    expect(normalizeWebMcpTools(null)).toEqual([]);
+    expect(normalizeWebMcpTools({ tools: [tool] })).toHaveLength(1);
+    expect(normalizeWebMcpTools({ begin_resolution: tool })).toHaveLength(1);
+    expect(normalizeWebMcpTools({ notATool: 1 })).toEqual([]);
+  });
+
+  it("registers even when getTools returns a non-array, and refreshes execute", async () => {
+    const byName: Record<
+      string,
+      {
+        name: string;
+        description: string;
+        inputSchema: Record<string, unknown>;
+        execute: (input: Record<string, unknown>) => Promise<unknown>;
+      }
+    > = {};
+    const context = {
+      registerTool: (tool: (typeof byName)[string]) => {
+        if (byName[tool.name]) {
+          throw new Error("already registered");
+        }
+        byName[tool.name] = tool;
+      },
+      // Host bug reproduction: object map, not Array — .find would throw.
+      getTools: () => byName as unknown as Array<(typeof byName)[string]>,
+    };
+
     const first = registerTheaterTools(context, async () => ({ generation: 1 }));
-    generation = 2;
-    const second = registerTheaterTools(context, async () => ({ generation }));
     expect(first).toHaveLength(10);
+    expect(Object.keys(byName)).toHaveLength(10);
+
+    const second = registerTheaterTools(context, async () => ({ generation: 2 }));
     expect(second).toHaveLength(10);
-    expect(registered).toHaveLength(10);
-    const begin = registered.find((tool) => tool.name === "begin_resolution");
-    await expect(begin?.execute({})).resolves.toEqual({ generation: 2 });
+    const begin = byName.begin_resolution;
+    expect(begin).toBeTruthy();
+    await expect(begin!.execute({})).resolves.toEqual({ generation: 2 });
   });
 
   it("explains orchestration tools in plain language", () => {

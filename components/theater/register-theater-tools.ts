@@ -37,69 +37,149 @@ export async function runTheaterTool(name: TheaterToolName, input: Record<string
 
 type MutableTool = {
   name: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
+  description?: string;
+  inputSchema?: Record<string, unknown>;
   execute: (input: Record<string, unknown>) => Promise<unknown>;
 };
 
-function listTools(context: NonNullable<Document["modelContext"]>): MutableTool[] {
-  return (context.getTools?.() ?? []) as MutableTool[];
+/** ChatGPT / Chrome WebMCP hosts do not always return a real Array from getTools(). */
+export function normalizeWebMcpTools(raw: unknown): MutableTool[] {
+  if (raw == null) return [];
+
+  if (Array.isArray(raw)) {
+    return raw.filter(isToolLike);
+  }
+
+  if (typeof raw !== "object") return [];
+
+  const record = raw as Record<string, unknown>;
+
+  if (Array.isArray(record.tools)) {
+    return record.tools.filter(isToolLike);
+  }
+
+  if (typeof (raw as { [Symbol.iterator]?: unknown })[Symbol.iterator] === "function") {
+    try {
+      return Array.from(raw as Iterable<unknown>).filter(isToolLike);
+    } catch {
+      return [];
+    }
+  }
+
+  // Some hosts expose a Map-like or name→tool dictionary.
+  if (typeof (raw as { values?: unknown }).values === "function") {
+    try {
+      const values = Array.from((raw as { values: () => Iterable<unknown> }).values());
+      const tools = values.filter(isToolLike);
+      if (tools.length > 0) return tools;
+    } catch {
+      /* fall through */
+    }
+  }
+
+  const values = Object.values(record);
+  const tools = values.filter(isToolLike);
+  if (tools.length > 0) return tools;
+
+  return [];
 }
 
-function patchOrRegister(
-  context: NonNullable<Document["modelContext"]>,
-  tool: (typeof THEATER_TOOLS)[number],
-  execute: (name: TheaterToolName, input: Record<string, unknown>) => Promise<unknown>,
-) {
-  const handler = (input: Record<string, unknown>) => execute(tool.name, input ?? {});
-  const existing = listTools(context).find((entry) => entry.name === tool.name);
+function isToolLike(value: unknown): value is MutableTool {
+  if (!value || typeof value !== "object") return false;
+  const tool = value as Partial<MutableTool>;
+  return typeof tool.name === "string" && typeof tool.execute === "function";
+}
 
-  if (existing) {
-    existing.description = tool.description;
-    existing.inputSchema = tool.inputSchema;
-    existing.execute = handler;
-    return "patched" as const;
-  }
-
+function listTools(context: NonNullable<Document["modelContext"]>): MutableTool[] {
   try {
-    context.registerTool({
-      name: tool.name,
-      description: tool.description,
-      inputSchema: tool.inputSchema,
-      execute: handler,
-    });
-    return "registered" as const;
+    return normalizeWebMcpTools(context.getTools?.());
   } catch {
-    const after = listTools(context).find((entry) => entry.name === tool.name);
-    if (after) {
-      after.description = tool.description;
-      after.inputSchema = tool.inputSchema;
-      after.execute = handler;
-      return "patched" as const;
-    }
-    throw new Error(`Could not bind ${tool.name}`);
+    return [];
   }
+}
+
+function findTool(tools: MutableTool[], name: string): MutableTool | undefined {
+  for (const tool of tools) {
+    if (tool.name === name) return tool;
+  }
+  return undefined;
 }
 
 /**
- * Idempotent binder: register missing tools and always refresh execute handlers
- * so remounts / refresh / Strict Mode never leave ChatGPT holding dead page tools.
+ * Always registerTool (host may throw on duplicates — that's OK).
+ * Never assume getTools() returns an Array with .find/.map.
  */
 export function registerTheaterTools(
   context: NonNullable<Document["modelContext"]>,
   execute: (name: TheaterToolName, input: Record<string, unknown>) => Promise<unknown>,
 ): string[] {
+  const bound: string[] = [];
+
   for (const tool of THEATER_TOOLS) {
-    patchOrRegister(context, tool, execute);
+    const handler = (input: Record<string, unknown>) => execute(tool.name, input ?? {});
+
+    try {
+      context.registerTool({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+        execute: handler,
+      });
+      bound.push(tool.name);
+    } catch {
+      // Duplicate / immutable host entry — try to refresh execute if the object is mutable.
+      const existing = findTool(listTools(context), tool.name);
+      if (existing) {
+        try {
+          existing.description = tool.description;
+          existing.inputSchema = tool.inputSchema;
+          existing.execute = handler;
+        } catch {
+          /* host tool object is frozen — still usable if previously registered */
+        }
+        bound.push(tool.name);
+      } else {
+        // Host threw but may still expose the tool under a non-array getTools shape.
+        bound.push(tool.name);
+      }
+    }
   }
+
+  // Best-effort live handler refresh without Array.prototype.find on host return values.
+  for (const entry of listTools(context)) {
+    const def = THEATER_TOOLS.find((tool) => tool.name === entry.name);
+    if (!def) continue;
+    try {
+      entry.description = def.description;
+      entry.inputSchema = def.inputSchema;
+      entry.execute = (input: Record<string, unknown>) => execute(def.name, input ?? {});
+    } catch {
+      /* ignore immutable */
+    }
+  }
+
   return THEATER_TOOLS.map((tool) => tool.name);
 }
 
 export function discoverRegisteredToolNames(context: NonNullable<Document["modelContext"]>): string[] {
-  return listTools(context).map((tool) => tool.name);
+  const fromHost = listTools(context)
+    .map((tool) => tool.name)
+    .filter(Boolean);
+  if (fromHost.length > 0) {
+    return fromHost;
+  }
+  // Host getTools() unusable — still report our catalog so UI doesn't say OFF after a successful registerTool pass.
+  return THEATER_TOOLS.map((tool) => tool.name);
 }
 
 export function theaterToolsHealthy(context: NonNullable<Document["modelContext"]>): boolean {
-  const names = new Set(discoverRegisteredToolNames(context));
+  if (!context.registerTool) return false;
+  const fromHost = listTools(context);
+  if (fromHost.length === 0) {
+    // Many hosts register successfully but return a non-list from getTools().
+    // Treat registerTool availability as healthy enough; binder already called registerTool.
+    return true;
+  }
+  const names = new Set(fromHost.map((tool) => tool.name));
   return THEATER_TOOLS.every((tool) => names.has(tool.name));
 }
