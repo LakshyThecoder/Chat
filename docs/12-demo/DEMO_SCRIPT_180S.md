@@ -3,7 +3,7 @@
 Canonical URL: https://aegis-chamber.vercel.app
 
 0:00–0:15
-Show the desk. Two recoverable disputes, one blocked booking. “The consumer should not have to become a support specialist.”
+Show the manifesto. “People and agents share one desk.” Open the live desk.
 
 0:15–0:30
 WebMCP is on. Copy the yellow goal into ChatGPT. Tools are on this page.

@@ -9,12 +9,13 @@ Two disputes can pay. **FR0999 / BERG is already claimed and must stay blocked.*
 ## Judge path (about two minutes)
 
 1. Open the live URL in **ChatGPT’s in-app browser** (or Chrome 149+ with `chrome://flags/#enable-webmcp-testing`).
-2. Copy the yellow **goal** (not a tool recipe).
-3. Watch `inspect_counter` fill the passenger or plan on the desk.
-4. Click **File without signature**. It must fail with `APPROVAL_REQUIRED`.
-5. Let the agent prepare the two eligible filings. **Sign the amounts.**
-6. Agent (or **File signed claim**) runs `execute_filing` then `verify_filing`. Expected vs observed must match.
-7. The FR0999 / BERG row stays ineligible. Prepare must fail. Do not file it.
+2. Read the manifesto, then **Open the live desk** (or go to `#desk` / `?desk=1`).
+3. Copy the yellow **goal** (not a tool recipe).
+4. Watch `inspect_counter` fill the passenger or plan on the desk.
+5. Click **File without signature**. It must fail with `APPROVAL_REQUIRED`.
+6. Let the agent prepare the two eligible filings. **Sign the amounts.**
+7. Agent (or **File signed claim**) runs `execute_filing` then `verify_filing`. Expected vs observed must match.
+8. The FR0999 / BERG row stays ineligible. Prepare must fail. Do not file it.
 
 ## Why this is a WebMCP use case
 

@@ -37,6 +37,12 @@
   padding: 1rem;
 }
 
+.chamber-stamp {
+  border: 2px dashed currentColor;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chamber-pulse,
   .chamber-pulse-desk {
