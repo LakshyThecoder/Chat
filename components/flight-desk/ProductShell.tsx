@@ -6,12 +6,16 @@ export function ProductShell({
   webmcpReady,
   webmcpReason,
   inboxConnected,
+  researchLive,
+  toolCount,
   nextAction,
   children,
 }: {
   webmcpReady: boolean;
   webmcpReason: string;
   inboxConnected: boolean;
+  researchLive: boolean;
+  toolCount: number;
   nextAction: string;
   children: ReactNode;
 }) {
@@ -36,10 +40,13 @@ export function ProductShell({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="desk-pill" data-live={webmcpReady}>
-              {webmcpReady ? "Agent connected" : "Open in ChatGPT"}
+              {webmcpReady ? `Agent · ${toolCount || "live"} tools` : "Open in ChatGPT"}
             </span>
             <span className="desk-pill hidden sm:inline-flex" data-live={inboxConnected}>
-              {inboxConnected ? "Evidence inbox ready" : "Opening evidence…"}
+              {inboxConnected ? "Evidence inbox" : "Opening evidence…"}
+            </span>
+            <span className="desk-pill hidden md:inline-flex" data-live={researchLive}>
+              {researchLive ? "Official research" : "Research standby"}
             </span>
           </div>
         </div>
@@ -49,6 +56,26 @@ export function ProductShell({
           {nextAction}
           <span className="sr-only"> {webmcpReason}</span>
         </p>
+      </div>
+      <div className="power-rail">
+        <div className="mx-auto grid max-w-[1380px] gap-3 px-4 py-3 sm:grid-cols-4 sm:px-8">
+          <div className="power-cell" data-on={webmcpReady}>
+            <p>WebMCP</p>
+            <strong>{webmcpReady ? "Bound" : "Waiting"}</strong>
+          </div>
+          <div className="power-cell" data-on={inboxConnected}>
+            <p>Inbox</p>
+            <strong>{inboxConnected ? "Live" : "Opening"}</strong>
+          </div>
+          <div className="power-cell" data-on={true}>
+            <p>Rights engine</p>
+            <strong>Deterministic</strong>
+          </div>
+          <div className="power-cell" data-on={researchLive}>
+            <p>Exa research</p>
+            <strong>{researchLive ? "Official only" : "Key needed"}</strong>
+          </div>
+        </div>
       </div>
       <div id="desk-main" className="mx-auto max-w-[1380px] px-4 pb-16 pt-8 sm:px-8 sm:pt-12">
         {children}

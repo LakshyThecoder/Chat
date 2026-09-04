@@ -14,6 +14,8 @@ describe("Exa passenger-rights research", () => {
   });
 
   it("refuses research when the server key is absent", async () => {
+    delete process.env.EXA_API_KEY;
+    resetEnvCacheForTests();
     await expect(
       researchPassengerRights(
         { origin: "CDG", destination: "FCO", regime: "EU261", disruption: "cancelled" },
@@ -36,6 +38,15 @@ describe("Exa passenger-rights research", () => {
               highlights: ["Passengers may be entitled to reimbursement or compensation."],
             },
           ],
+          output: {
+            content: {
+              briefing: "EU261 may entitle passengers to reimbursement and care after a short-notice cancellation.",
+              compensationNotes: "Compensation depends on distance and notice.",
+              careNotes: "Meals and accommodation may be due while waiting.",
+              exceptions: "Extraordinary circumstances can limit compensation.",
+              claimDeadline: "Unknown from official sources retrieved.",
+            },
+          },
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       ),
@@ -49,12 +60,16 @@ describe("Exa passenger-rights research", () => {
     const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
       type: string;
       includeDomains: string[];
+      outputSchema: { required: string[] };
       contents: { highlights: { maxCharacters: number } };
     };
     expect(request.type).toBe("auto");
-    expect(request.includeDomains).toEqual(["europa.eu", "eur-lex.europa.eu"]);
+    expect(request.includeDomains).toEqual(["europa.eu", "eur-lex.europa.eu", "ec.europa.eu"]);
+    expect(request.outputSchema.required).toContain("briefing");
     expect(request.contents.highlights.maxCharacters).toBe(1800);
     expect(result.sources[0]?.url).toContain("europa.eu");
+    expect(result.briefing?.briefing).toMatch(/EU261/);
+    expect(result.authoritativeAmount).toBe(false);
     expect(result.providerRequestId).toBe("exa_req_1");
   });
 

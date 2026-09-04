@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AgentPromptArsenal } from "@/components/flight-desk/AgentPromptArsenal";
 import { AgentTape } from "@/components/flight-desk/AgentTape";
 import { EvidenceResearch } from "@/components/flight-desk/EvidenceResearch";
 import { FlightDeskWebMcp } from "@/components/flight-desk/FlightDeskWebMcp";
@@ -79,6 +80,7 @@ export function FlightDeskApp() {
   const [tape, setTape] = useState<TheaterToolPulse[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [researchLive, setResearchLive] = useState(false);
 
   const applyTheater = useCallback((next: TheaterSnapshot, focusId?: string) => {
     setTheater(next);
@@ -119,6 +121,22 @@ export function FlightDeskApp() {
   useEffect(() => {
     void openSession(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- open once
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/health/integrations")
+      .then(async (response) => {
+        if (!response.ok) return;
+        const payload = (await response.json()) as { integrations?: { officialResearch?: boolean } };
+        if (!cancelled) setResearchLive(Boolean(payload.integrations?.officialResearch));
+      })
+      .catch(() => {
+        if (!cancelled) setResearchLive(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -284,6 +302,8 @@ export function FlightDeskApp() {
         webmcpReady={webmcp.ready}
         webmcpReason={webmcp.reason}
         inboxConnected={Boolean(theater)}
+        researchLive={researchLive}
+        toolCount={webmcp.tools.length}
         nextAction={nextActionCopy(theater, webmcp.ready)}
       >
         {loadError ? (
@@ -401,6 +421,7 @@ export function FlightDeskApp() {
                   destination={booking?.destination ?? null}
                   cancelled={Boolean(booking?.cancelledByCarrier)}
                   rights={rights}
+                  researchLive={researchLive}
                 />
                 {selectedMail ? (
                   <article className="desk-card p-5">
@@ -421,6 +442,7 @@ export function FlightDeskApp() {
                   onDeny={(id) => void decide(id, "denied")}
                   onFileUnsigned={(id) => void fileUnsigned(id)}
                 />
+                <AgentPromptArsenal />
                 <AgentTape tape={tape} />
               </div>
             </div>

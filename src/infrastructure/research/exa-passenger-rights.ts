@@ -10,9 +10,22 @@ const exaResultSchema = z.object({
   highlights: z.array(z.string()).default([]),
 });
 
+const briefingSchema = z.object({
+  briefing: z.string().min(1),
+  compensationNotes: z.string().min(1),
+  careNotes: z.string().min(1),
+  exceptions: z.string().min(1),
+  claimDeadline: z.string().min(1),
+});
+
 const exaResponseSchema = z.object({
   requestId: z.string().optional(),
   results: z.array(exaResultSchema),
+  output: z
+    .object({
+      content: briefingSchema,
+    })
+    .optional(),
 });
 
 export const passengerRightsResearchInputSchema = z.object({
@@ -31,17 +44,57 @@ export interface PassengerRightsSource {
   highlights: string[];
 }
 
+export interface PassengerRightsBriefing {
+  briefing: string;
+  compensationNotes: string;
+  careNotes: string;
+  exceptions: string;
+  claimDeadline: string;
+}
+
 export interface PassengerRightsResearch {
   query: string;
+  regime: PassengerRightsResearchInput["regime"];
+  disruption: PassengerRightsResearchInput["disruption"];
+  briefing: PassengerRightsBriefing | null;
   sources: PassengerRightsSource[];
   providerRequestId: string | null;
+  authoritativeAmount: false;
 }
 
 const DOMAINS: Record<PassengerRightsResearchInput["regime"], string[]> = {
-  EU261: ["europa.eu", "eur-lex.europa.eu"],
-  UK261: ["caa.co.uk", "legislation.gov.uk"],
-  DOT: ["transportation.gov"],
+  EU261: ["europa.eu", "eur-lex.europa.eu", "ec.europa.eu"],
+  UK261: ["caa.co.uk", "legislation.gov.uk", "gov.uk"],
+  DOT: ["transportation.gov", "dot.gov"],
 };
+
+const OUTPUT_SCHEMA = {
+  type: "object",
+  description: "Grounded passenger-rights briefing from official sources only",
+  required: ["briefing", "compensationNotes", "careNotes", "exceptions", "claimDeadline"],
+  properties: {
+    briefing: {
+      type: "string",
+      description: "Two-sentence grounded summary of the passenger right for this disruption",
+    },
+    compensationNotes: {
+      type: "string",
+      description: "What official sources say about cash compensation or refund eligibility",
+    },
+    careNotes: {
+      type: "string",
+      description: "Meals, hotels, rerouting, or care obligations mentioned by official sources",
+    },
+    exceptions: {
+      type: "string",
+      description: "Extraordinary circumstances or other official exceptions",
+    },
+    claimDeadline: {
+      type: "string",
+      description: "Any official claim deadline or limitation period mentioned; say unknown if absent",
+    },
+  },
+} as const;
 
 export class ExaNotConfiguredError extends Error {
   readonly code = "EXA_NOT_CONFIGURED";
@@ -70,8 +123,9 @@ export async function researchPassengerRights(
   if (!apiKey) throw new ExaNotConfiguredError();
 
   const query =
-    `Official ${input.regime} passenger rights for a ${input.disruption} flight ` +
-    `from ${input.origin} to ${input.destination}; compensation, refund, care, exceptions, and claim deadline`;
+    `Official ${input.regime} air passenger rights for a ${input.disruption} flight ` +
+    `from ${input.origin} to ${input.destination}: compensation bands, unused-fare refund, ` +
+    `care obligations, extraordinary circumstances, and claim deadlines`;
 
   const response = await fetchImpl("https://api.exa.ai/search", {
     method: "POST",
@@ -82,17 +136,20 @@ export async function researchPassengerRights(
     body: JSON.stringify({
       query,
       type: "auto",
-      numResults: 6,
+      numResults: 8,
       includeDomains: DOMAINS[input.regime],
       moderation: true,
+      systemPrompt:
+        "Prefer official government and regulator pages only. Collapse duplicates. Never invent amounts. Keep every claim grounded in the retrieved sources.",
+      outputSchema: OUTPUT_SCHEMA,
       contents: {
         highlights: {
-          query: "Eligibility, amount, passenger care, exceptions, deadline, and official legal basis",
+          query: "Eligibility, compensation, refund, care, exceptions, and claim deadline",
           maxCharacters: 1800,
         },
       },
     }),
-    signal: AbortSignal.timeout(12_000),
+    signal: AbortSignal.timeout(20_000),
   });
 
   if (!response.ok) {
@@ -106,7 +163,11 @@ export async function researchPassengerRights(
 
   return {
     query,
+    regime: input.regime,
+    disruption: input.disruption,
+    briefing: parsed.data.output?.content ?? null,
     providerRequestId: parsed.data.requestId ?? null,
+    authoritativeAmount: false,
     sources: parsed.data.results.map((result) => ({
       title: result.title,
       url: result.url,
