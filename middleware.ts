@@ -13,6 +13,7 @@ function isAlwaysAllowedPath(pathname: string): boolean {
   if (pathname === "/favicon.ico") return true;
   if (pathname.startsWith("/api/")) return true;
   if (pathname.startsWith("/_next/")) return true;
+  if (pathname.startsWith("/providers/flyright")) return true;
   return false;
 }
 

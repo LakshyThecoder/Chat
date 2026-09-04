@@ -25,18 +25,18 @@ export function workItemNarrative(identity: TheaterWorkItemIdentity): {
   }
   if (identity.providerId === "flyright") {
     return {
-      problem: "Carrier cancelled the flight. The ticket was unused. The fare should come back.",
+      problem: "Carrier cancelled the flight. The ticket was unused. File the unused fare. EU261 may add statutory cash.",
       source: "Live FlyRight booking issued for this desk visit.",
     };
   }
   if (identity.providerId === "streamly") {
     return {
-      problem: "The plan was cancelled, then Streamly charged again. That charge should reverse.",
-      source: "Live Streamly subscription issued for this desk visit.",
+      problem: "Out of scope on the flight desk. Do not file this item.",
+      source: "Non-flight leftover. Ignore it.",
     };
   }
   return {
-    problem: "Warranty path is not on this desk. Do not file it here.",
-    source: "ElectroMart is not issued in the judge session.",
+    problem: "Out of scope on the flight desk. Do not file it here.",
+    source: "Non-flight leftover. Ignore it.",
   };
 }

@@ -31,7 +31,20 @@ export function ledgerCopy(input: {
 
   switch (name) {
     case "list_work_items":
-      return { headline: "Agent listed the desk", detail: "Three disputes, live states." };
+    case "scan_airline_mail":
+    case "get_travel_graph":
+      return { headline: "Agent read the airline inbox", detail: "Bookings, cancellations, and promo trips on this desk." };
+    case "get_disruption":
+      return { headline: "Agent opened the disruption", detail: "Scheduled vs actual vs rights clock." };
+    case "compute_rights":
+      return {
+        headline: input.amount
+          ? `Software calculated ${input.amount} from passenger-rights rules`
+          : "Software evaluated passenger rights",
+        detail: "EU261 / UK261 / DOT / fare refund. The model does not own this amount.",
+      };
+    case "prepare_claim":
+      return { headline: "Claim prepared", detail: "Payload, amount, and expected verification are frozen." };
     case "get_work_item":
       return { headline: "Agent opened one dispute", detail: "Read current state and next actions." };
     case "inspect_counter":

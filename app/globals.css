@@ -38,16 +38,8 @@
   }
 
   body {
-    background-color: hsl(var(--background));
-    background-image:
-      radial-gradient(ellipse at top, hsla(150, 20%, 80%, 0.45), transparent 42%),
-      repeating-linear-gradient(
-        0deg,
-        transparent,
-        transparent 27px,
-        hsla(150, 12%, 20%, 0.035) 28px
-      );
-    color: hsl(var(--foreground));
+    background-color: #f4f5f0;
+    color: #111714;
     font-family: var(--font-sans), system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;

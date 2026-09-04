@@ -1,5 +1,5 @@
-import { ChamberHome } from "@/components/landing/ChamberHome";
+import { FlightDeskApp } from "@/components/flight-desk/FlightDeskApp";
 
 export default function HomePage() {
-  return <ChamberHome />;
+  return <FlightDeskApp />;
 }

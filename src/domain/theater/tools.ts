@@ -49,7 +49,7 @@ export const THEATER_TOOLS: TheaterToolDefinition[] = [
   {
     name: "begin_resolution",
     description:
-      "Primary entry when the human says go ahead. Inspects, computes entitlement, prepares filings, and requests signatures for every eligible dispute on this desk. Never files. Never touches the already-claimed FR0999 / BERG booking. Stops for human signature — then call continue_resolution.",
+      "Primary flight-desk entry when the human says go ahead or asks what they are owed. Scans airline bookings on this page, inspects FlyRight, computes deterministic rights, prepares filings, and stops for human signature. Never files. Never touches the already-claimed FR0999 / BERG booking. Ignore Streamly. Then call continue_resolution.",
     sideEffect: "orchestrate",
     authorization: "session-cookie",
     idempotent: true,
@@ -59,7 +59,7 @@ export const THEATER_TOOLS: TheaterToolDefinition[] = [
   {
     name: "continue_resolution",
     description:
-      "After the human signs prepared amounts on this page: execute_filing and verify_filing for each approved dispute. Refuses unsigned items with APPROVAL_REQUIRED. Success only when verify_filing matched=true. Leaves blocked bookings alone.",
+      "After the human signs prepared flight amounts on this page: execute_filing and verify_filing for each approved FlyRight claim. Refuses unsigned items with APPROVAL_REQUIRED. Success only when verify_filing matched=true. Leaves FR0999 / BERG alone.",
     sideEffect: "orchestrate",
     authorization: "session-cookie",
     idempotent: true,
@@ -69,7 +69,7 @@ export const THEATER_TOOLS: TheaterToolDefinition[] = [
   {
     name: "list_work_items",
     description:
-      "List the three disputes on this desk and their live states. The FR0999 / BERG booking is already claimed and must not be filed.",
+      "List live work items on this flight desk. File only FlyRight cancellations. The FR0999 / BERG booking is already claimed and must not be filed. Ignore any leftover non-flight items.",
     sideEffect: "read",
     authorization: "session-cookie",
     idempotent: true,
@@ -78,7 +78,7 @@ export const THEATER_TOOLS: TheaterToolDefinition[] = [
   },
   {
     name: "get_work_item",
-    description: "Read one theater work item by workItemId, including next permitted actions.",
+    description: "Read one flight-desk work item by workItemId, including next permitted actions, rights, and signature state.",
     sideEffect: "read",
     authorization: "session-cookie",
     idempotent: true,
@@ -88,7 +88,7 @@ export const THEATER_TOOLS: TheaterToolDefinition[] = [
   {
     name: "inspect_counter",
     description:
-      "Read the live provider record for this dispute and paint it on the desk (booking or subscription plus any existing claim). Read-only. Does not file.",
+      "Read the live FlyRight booking and any existing claim, then paint it on the itinerary ribbon. Read-only. Does not file.",
     sideEffect: "read",
     authorization: "session-cookie",
     idempotent: true,
@@ -98,7 +98,7 @@ export const THEATER_TOOLS: TheaterToolDefinition[] = [
   {
     name: "compute_entitlement",
     description:
-      "Compute deterministic entitlement from the observed provider state and published policy. Software owns the amount. Does not submit anything.",
+      "Compute deterministic passenger rights from the observed FlyRight row (unused-fare refund to file; EU261/UK261/DOT shown as separate lines). Software owns the amount. Does not submit anything.",
     sideEffect: "compute",
     authorization: "session-cookie",
     idempotent: true,

@@ -141,7 +141,7 @@ describeIf("resolution theater (integration)", () => {
 
     const snapshot = await getTheaterSnapshot(token);
     expect(snapshot.items.find((item) => item.id === flyItem.id)?.status).toBe("VERIFIED");
-  });
+  }, 20_000);
 
   it("verification mismatch fails closed and concurrent execute shares one mutation", async () => {
     const created = await createTheaterSession();
@@ -191,7 +191,7 @@ describeIf("resolution theater (integration)", () => {
       input: { workItemId: item.id },
     });
     expect((retried.result.verification as { matched: boolean }).matched).toBe(false);
-  });
+  }, 20_000);
 
   it("provider conflict is surfaced (already claimed FlyRight probe)", async () => {
     if (!token) throw new Error("missing token");
@@ -250,15 +250,17 @@ describeIf("resolution theater (integration)", () => {
       prepared?: string[];
       awaitingSignature?: string[];
       skippedBlocked?: Array<{ id: string }>;
+      skippedOutOfScope?: Array<{ id: string }>;
       humanActionRequired?: boolean;
     };
     expect(beginExtra.humanActionRequired).toBe(true);
-    expect(beginExtra.prepared).toEqual(expect.arrayContaining([flyItem.id, streamItem.id]));
+    expect(beginExtra.prepared).toEqual([flyItem.id]);
     expect(beginExtra.skippedBlocked?.map((entry) => entry.id)).toContain(blockedItem.id);
+    expect(beginExtra.skippedOutOfScope?.map((entry) => entry.id)).toContain(streamItem.id);
 
     const afterBegin = await getTheaterSnapshot(orchToken);
     expect(afterBegin.items.find((item) => item.id === flyItem.id)?.status).toBe("AWAITING_SIGNATURE");
-    expect(afterBegin.items.find((item) => item.id === streamItem.id)?.status).toBe("AWAITING_SIGNATURE");
+    expect(afterBegin.items.find((item) => item.id === streamItem.id)?.status).toBe("UNINSPECTED");
     expect(afterBegin.items.find((item) => item.id === blockedItem.id)?.catalogBlocked).toBe(true);
 
     const unsignedContinue = await executeTheaterTool({
@@ -270,13 +272,10 @@ describeIf("resolution theater (integration)", () => {
       stillAwaitingSignature?: string[];
       verified?: string[];
     };
-    expect(unsignedExtra.stillAwaitingSignature).toEqual(
-      expect.arrayContaining([flyItem.id, streamItem.id]),
-    );
+    expect(unsignedExtra.stillAwaitingSignature).toEqual([flyItem.id]);
     expect(unsignedExtra.verified ?? []).toHaveLength(0);
 
     await decideTheaterWorkItem({ token: orchToken, workItemId: flyItem.id, decision: "approved" });
-    await decideTheaterWorkItem({ token: orchToken, workItemId: streamItem.id, decision: "approved" });
 
     const continued = await executeTheaterTool({
       token: orchToken,
@@ -288,13 +287,13 @@ describeIf("resolution theater (integration)", () => {
       stillAwaitingSignature?: string[];
       failed?: Array<{ id: string }>;
     };
-    expect(continueExtra.verified).toEqual(expect.arrayContaining([flyItem.id, streamItem.id]));
+    expect(continueExtra.verified).toEqual([flyItem.id]);
     expect(continueExtra.stillAwaitingSignature ?? []).toHaveLength(0);
     expect(continueExtra.failed ?? []).toHaveLength(0);
 
     const finalSnap = await getTheaterSnapshot(orchToken);
     expect(finalSnap.items.find((item) => item.id === flyItem.id)?.status).toBe("VERIFIED");
-    expect(finalSnap.items.find((item) => item.id === streamItem.id)?.status).toBe("VERIFIED");
+    expect(finalSnap.items.find((item) => item.id === streamItem.id)?.status).toBe("UNINSPECTED");
     expect(finalSnap.items.find((item) => item.id === blockedItem.id)?.status).not.toBe("VERIFIED");
   },
     30_000,

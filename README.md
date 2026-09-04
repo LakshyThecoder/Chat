@@ -1,31 +1,44 @@
-# Aegis OS
+# Aegis Flight Desk
 
 **Live demo:** https://aegis-chamber.vercel.app
 
-**Aegis OS** is the shared desktop where you and ChatGPT get consumer money back — not a chatbot. Two beats on one URL:
+Aegis is a two-sided passenger-rights control plane. An agent turns airline mail into a travel graph, prices the claim with deterministic law, stops for a human signature, files through the airline's own WebMCP surface, and verifies the provider row. Software owns the money. You own permission.
 
-1. **Provider desk** — live sandbox rows, human UAC, `verify_filing` matched  
-2. **Mail Disputes** — billed-after-cancel in the sandbox mailbox → import bill → policy → sign → send → `verify_sent` matched  
-
-Software owns amounts. You own permission. Success is a re-read.
+The homepage **is** the product. No boot splash. No fake operating system.
 
 ## Judge path (~2.5 minutes)
 
-1. Open https://aegis-chamber.vercel.app in **ChatGPT’s in-app browser** (or Chrome 149+ WebMCP flag).
-2. Wait for **WEBMCP ONLINE**.
-3. **Beat A — Provider:** Copy **“Go ahead.”** → agent `begin_resolution` → **File without signature** must return `APPROVAL_REQUIRED` → Sign both amounts → **“Continue.”** → VERIFY matched. FR0999 stays blocked.
-4. **Beat B — Mail:** Dock → **Mail Disputes** → say **“Check my email for CodeForge and prepare a refund.”** (or Begin mail resolution) → Sign outbound UAC → Send → VERIFY · SENT MATCHED.
-5. Close: agent cannot move money or send without you.
+1. Open https://aegis-chamber.vercel.app in **ChatGPT’s in-app browser** (or Chrome 149+ with `chrome://flags/#enable-webmcp-testing`).
+2. Wait for **WebMCP live**.
+3. Keep the **Live Judge Mission** in view; it starts at 0/6 and only advances from observed workflow state.
+4. Copy **“Check my airline email and tell me what I’m owed.”**
+5. Agent scans the airline inbox (bookings, cancellations, **promos**), builds the travel graph, computes rights, and stops for signature. FR0999 / BERG stays blocked.
+6. **File without signature** must return `APPROVAL_REQUIRED`; the mission cannot skip consent.
+7. Authorize the exact unused-fare amount from the mission board.
+8. Click **File and verify**. Filing executes, the carrier is re-read, and the mission reaches 6/6 only when `verify_filing` matches.
 
-## Tools on `/`
+## What people and agents do together
 
-Provider: `begin_resolution` · `continue_resolution` · atomic inspect → verify  
+- **You** connect the airline inbox, read evidence, and sign the amount.
+- **ChatGPT** calls WebMCP tools on this page: scan mail, compute rights, prepare, file, verify.
+- **Software** calculates unused-fare refund plus EU261 / UK261 / DOT lines. The model never owns the number.
+- **FlyRight** is a second WebMCP surface — a live airline counter the agent can inspect and file against.
 
-Mail: `begin_mail_resolution` · `list_mail_disputes` · `import_bill` · `lookup_refund_policy` · `prepare_support_email` · `request_mail_signature` · `send_support_email` · `verify_sent`
+Promotional mail is kept on purpose. A sale email can reveal a future itinerary before it breaks.
+
+## WebMCP tools on `/`
+
+Orchestration: `begin_resolution` · `continue_resolution`
+
+Flight desk: `scan_airline_mail` · `get_travel_graph` · `get_disruption` · `compute_rights` · `research_passenger_rights` · `prepare_claim`
+
+Carrier loop: `inspect_counter` · `compute_entitlement` · `prepare_filing` · `request_signature` · `execute_filing` · `verify_filing`
+
+Registered with `document.modelContext.registerTool`. Amounts come from deterministic policy. Unsigned mutations fail.
 
 ## Why WebMCP
 
-A refund is a two-sided job. Scraping a desk or calling a hidden API breaks that. Tools register with `document.modelContext.registerTool`, mutate live sandbox state, and paint the same windows you see. Permission is inside `execute_filing` / `send_support_email`.
+A refund is two-sided. Scraping a carrier site or calling a hidden API breaks the shared desk. Tools mutate live sandbox rows and paint the same itinerary, rights, and permission sheet you see.
 
 ## Run
 
@@ -35,25 +48,26 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Required: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Apply `supabase/migrations/` including `theater_*` and `mail_desk`.
+Required: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Apply `supabase/migrations/` including `theater_*`.
+
+Optional: `EXA_API_KEY` enables citation-preserving passenger-rights research. The server limits retrieval to official government domains for the applicable regime; Exa evidence never replaces deterministic money calculation.
+
+The current judge path uses the seeded airline inbox. Gmail OAuth credentials must be rotated if exposed and must not be enabled until refresh-token storage is encrypted, user-owned, and protected by RLS.
 
 ```bash
 npm run preflight
 npm run test:theater
-npx vitest run tests/integration/mail-desk.integration.test.ts
 ```
-
-`GET /api/health/theater` — provider desk readiness.
 
 ## Paste this on Devpost
 
-**Why WebMCP:** A refund is two-sided. The person signs. The agent looks up and files/sends. WebMCP is the shared desktop — not a scrape and not a hidden API.
+**Why WebMCP:** Passenger rights cross multiple live contexts: the traveler’s inbox, an eligibility engine, human consent, and airline state. WebMCP lets one agent use typed capabilities across that entire path while sharing the visible page and signed-in session with the person. This cannot be delivered reliably by DOM guessing or a hidden backend action.
 
-**Better UX:** Say “Go ahead.” for provider filings. Say “Check my email for CodeForge…” for mail disputes. Unsigned actions fail with APPROVAL_REQUIRED. Success is expected vs observed.
+**Better UX:** The homepage is a flight desk — inbox, itinerary ribbon, rights, permission. Say “Check my airline email…”. Unsigned filings return `APPROVAL_REQUIRED`. Success is expected vs observed.
 
-**Together:** One URL, one session, provider + mailbox, human UAC, verified outcomes.
+**Together:** ChatGPT reconstructs the trip, reads the carrier, computes the claim, and prepares execution. The person inspects evidence and signs the exact amount. The agent then files and verifies. Promotional mail can become a watched future trip; an existing claim becomes a replay block.
 
-**How we implemented it:** `document.modelContext.registerTool` on `/` for theater + mail desk tools. Sandbox rows and outbound_mail are real. Amounts from software. Gmail ports exist for public launch; demo uses sandbox mail.
+**How we implemented it:** `/` registers route-scoped typed tools with `document.modelContext.registerTool`. Read, compute, prepare, mutate, and verify capabilities have explicit schemas and side-effect semantics. Sandbox bookings and claims are persisted rows. High-impact execution checks server-side approval immediately before mutation, uses idempotency keys, and only reports success after a provider re-read matches the signed amount.
 
 ## License
 

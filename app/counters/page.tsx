@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/layout/AppShell";
 import { PROVIDER_CATALOG } from "@/src/domain/providers/catalog";
 
-const COUNTERS = [PROVIDER_CATALOG.flyright, PROVIDER_CATALOG.streamly, PROVIDER_CATALOG.electromart];
+const COUNTERS = [PROVIDER_CATALOG.flyright];
 
 export default function CountersPage() {
   return (

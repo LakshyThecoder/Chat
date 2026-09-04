@@ -1,0 +1,385 @@
+.flight-desk {
+  --canvas: #f4f5f0;
+  --surface: #ffffff;
+  --ink: #111714;
+  --muted: #64706a;
+  --line: #dfe3dc;
+  --blue: #1e49e2;
+  --blue-dark: #1537ad;
+  --lime: #c7f04b;
+  --red: #dc463d;
+  --green: #167a57;
+  --night: #111a2e;
+  --mist: var(--muted);
+  --notam: var(--red);
+  --recovered: var(--green);
+  min-height: 100vh;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 85% -10%, rgba(30, 73, 226, 0.11), transparent 30rem),
+    var(--canvas);
+  color: var(--ink);
+}
+
+.flight-desk button,
+.flight-desk a {
+  cursor: pointer;
+}
+
+.flight-desk button:focus-visible,
+.flight-desk a:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 3px;
+}
+
+.desk-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0.4rem 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.desk-pill::before {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--red);
+  content: "";
+}
+
+.desk-pill[data-live="true"]::before {
+  background: var(--green);
+  box-shadow: 0 0 0 4px rgba(22, 122, 87, 0.1);
+}
+
+.desk-card {
+  border: 1px solid var(--line);
+  border-radius: 1.25rem;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 18px 55px rgba(17, 23, 20, 0.05);
+}
+
+.desk-btn {
+  min-height: 2.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0.7rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.desk-btn:hover:not(:disabled) {
+  border-color: #bcc4ba;
+  transform: translateY(-1px);
+}
+
+.desk-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.desk-btn-solid {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: white;
+  box-shadow: 0 12px 30px rgba(30, 73, 226, 0.2);
+}
+
+.desk-btn-solid:hover:not(:disabled) {
+  border-color: var(--blue-dark);
+  background: var(--blue-dark);
+}
+
+.desk-btn-amber {
+  border-color: var(--lime);
+  background: var(--lime);
+  color: #172000;
+}
+
+.desk-btn-danger {
+  border-color: rgba(220, 70, 61, 0.35);
+  color: var(--red);
+}
+
+.mission-board {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.5rem;
+  background: #0b1020;
+  color: white;
+  box-shadow: 0 26px 70px rgba(11, 16, 32, 0.2);
+}
+
+.mission-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.5rem;
+}
+
+.mission-kicker {
+  margin-bottom: 0.4rem;
+  color: var(--lime);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.mission-score {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.45);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.8rem;
+}
+
+.mission-score span {
+  color: var(--lime);
+  font-size: 1.7rem;
+  font-weight: 800;
+}
+
+.mission-track {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.mission-step {
+  min-height: 8.5rem;
+  padding: 1.1rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.mission-step:last-child {
+  border-right: 0;
+}
+
+.mission-node {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  margin-bottom: 1.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.42);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.64rem;
+  font-weight: 800;
+}
+
+.mission-step[data-state="done"] .mission-node {
+  border-color: var(--lime);
+  background: var(--lime);
+  color: #172000;
+}
+
+.mission-step[data-state="active"] {
+  background: linear-gradient(180deg, rgba(30, 73, 226, 0.24), transparent);
+}
+
+.mission-step[data-state="active"] .mission-node {
+  border-color: #6f8cff;
+  color: white;
+  box-shadow: 0 0 0 5px rgba(76, 109, 255, 0.13);
+}
+
+.mission-step[data-state="failed"] .mission-node {
+  border-color: var(--red);
+  color: #ff8d86;
+}
+
+.mission-label {
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.mission-proof {
+  margin-top: 0.32rem;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.mission-step[data-state="done"] .mission-proof,
+.mission-step[data-state="active"] .mission-proof {
+  color: rgba(255, 255, 255, 0.67);
+}
+
+.mission-console {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+}
+
+.mission-proof-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 999px;
+  padding: 0.38rem 0.62rem;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.mission-action {
+  min-height: 2.75rem;
+  border-radius: 0.72rem;
+  background: var(--lime);
+  color: #172000;
+  padding: 0.65rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.mission-action:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.hero-word {
+  font-size: clamp(3.25rem, 7.8vw, 7.5rem);
+  line-height: 0.83;
+  letter-spacing: -0.075em;
+}
+
+.flight-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.75rem;
+  background:
+    radial-gradient(circle at 90% 0%, rgba(199, 240, 75, 0.18), transparent 16rem),
+    var(--night);
+  color: white;
+  box-shadow: 0 35px 90px rgba(17, 26, 46, 0.24);
+}
+
+.flight-card::before {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+  background-size: 48px 48px;
+  content: "";
+  pointer-events: none;
+}
+
+.route-line {
+  position: relative;
+  height: 2px;
+  flex: 1;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.route-line::after {
+  position: absolute;
+  top: 50%;
+  right: 22%;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--lime);
+  box-shadow: 0 0 0 6px rgba(199, 240, 75, 0.12);
+  content: "";
+  transform: translateY(-50%);
+}
+
+.claim-panel {
+  border-radius: 1.25rem;
+  background: var(--lime);
+  color: #172000;
+}
+
+.ticket {
+  display: grid;
+  grid-template-columns: 3.7rem 1fr;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: white;
+}
+
+.ticket-stub {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px dashed #ccd2ca;
+  background: #f0f2ed;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.kind-cancel,
+.kind-claim { color: var(--red); }
+.kind-promo { color: #866500; }
+.kind-booking { color: var(--green); }
+.kind-delay { color: #866500; }
+.kind-offer { color: var(--muted); }
+
+@media (max-width: 640px) {
+  .hero-word {
+    font-size: clamp(2.75rem, 14vw, 3.35rem);
+    line-height: 0.88;
+    letter-spacing: -0.065em;
+  }
+  .flight-card {
+    border-radius: 1.2rem;
+  }
+  .route-board {
+    gap: 0.75rem;
+  }
+  .route-board > div:not(.route-line) {
+    width: 5.5rem;
+  }
+  .mission-head,
+  .mission-console {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .mission-track {
+    grid-template-columns: 1fr;
+  }
+  .mission-step {
+    display: grid;
+    min-height: auto;
+    grid-template-columns: 2.4rem 1fr;
+    gap: 0.75rem;
+    border-right: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  }
+  .mission-step:last-child {
+    border-bottom: 0;
+  }
+  .mission-node {
+    margin-bottom: 0;
+  }
+  .mission-action {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flight-desk * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

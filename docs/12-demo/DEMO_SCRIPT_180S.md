@@ -2,29 +2,20 @@
 
 Canonical URL: https://aegis-chamber.vercel.app
 
-0:00–0:15
-Show the manifesto. “People and agents share one desk.” Open the live desk.
+0:00–0:20 — Show the product immediately: cancelled CDG → FCO, unused fare, separate EU261 line. Point to the live mission at 0/6: “Nothing here is prerecorded.”
 
-0:15–0:30
-WebMCP is on. Copy the yellow goal into ChatGPT. Tools are on this page.
+0:20–0:35 — In ChatGPT’s browser say: “Check my airline email and tell me what I’m owed.”
 
-0:30–0:50
-Agent calls `inspect_counter`. Passenger / plan appear. Software computes the amount.
+0:35–1:05 — Keep the mission board in frame. Agent binding, evidence, and rights turn complete from actual session state. Show the promo-derived watched trip.
 
-0:50–1:05
-**File without signature.** Show `APPROVAL_REQUIRED` on the desk and in the ledger.
+1:05–1:25 — Click “Test permission boundary.” `APPROVAL_REQUIRED` proves the agent cannot authorize itself. The mission remains at “You authorize.”
 
-1:05–1:25
-Agent prepares. Human **signs** the engine amount. “The model does not own this number.”
+1:25–1:45 — Click “Authorize €183.40” on the mission board. Say: “This is the only human gate; it signs an exact amount.”
 
-1:25–1:50
-`execute_filing` then `verify_filing`. Expected vs observed match. Claim/refund id is on the row.
+1:45–2:10 — Click “File and verify.” The final two mission cells complete only after the mutation and provider re-read. Open the matched carrier row.
 
-1:50–2:10
-Select FR0999 / BERG. Prepare fails. Already claimed stays blocked.
+2:10–2:25 — Select FR0999 / BERG. The duplicate claim badge and blocked row prove replay safety.
 
-2:10–2:40
-Second eligible row (Streamly) if time: same contract, different provider.
+2:25–2:40 — If Exa is configured, click “Research this right” and open one official citation. Explain that sources support the decision while software owns the amount.
 
-2:40–3:00
-“People and agents share one desk. The web, working for you.”
+2:40–3:00 — “WebMCP lets one agent move across inbox, law, human consent, and airline state without guessing through either UI. Every green step is observed state.”

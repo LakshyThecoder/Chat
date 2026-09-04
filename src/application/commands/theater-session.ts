@@ -611,9 +611,14 @@ export async function executeTheaterTool(params: {
       const awaitingSignature: string[] = [];
       const skippedBlocked: Array<{ id: string; reason: string }> = [];
       const skippedIneligible: Array<{ id: string; reason: string }> = [];
+      const skippedOutOfScope: Array<{ id: string; reason: string }> = [];
 
       let snapshot = await snapshotFrom(session);
       for (const item of snapshot.items) {
+        if (item.providerId !== "flyright") {
+          skippedOutOfScope.push({ id: item.id, reason: "Flight Desk only operates airline claims." });
+          continue;
+        }
         if (item.catalogBlocked) {
           skippedBlocked.push({ id: item.id, reason: item.problem });
           continue;
@@ -657,6 +662,7 @@ export async function executeTheaterTool(params: {
           prepared,
           awaitingSignature,
           skippedBlocked: skippedBlocked.map((entry) => entry.id),
+          skippedOutOfScope: skippedOutOfScope.map((entry) => entry.id),
         },
       });
 
@@ -669,6 +675,7 @@ export async function executeTheaterTool(params: {
             awaitingSignature,
             skippedBlocked,
             skippedIneligible,
+            skippedOutOfScope,
             humanActionRequired: awaitingSignature.length > 0,
             nextHumanStep:
               awaitingSignature.length > 0
@@ -686,6 +693,9 @@ export async function executeTheaterTool(params: {
 
       let snapshot = await snapshotFrom(session);
       for (const item of snapshot.items) {
+        if (item.providerId !== "flyright") {
+          continue;
+        }
         if (item.catalogBlocked) {
           continue;
         }

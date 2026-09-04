@@ -30,22 +30,22 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Aegis OS — Dispute Runtime",
+  title: "Aegis — Flight Desk",
   description:
-    "Aegis OS is a shared desktop for consumer disputes. ChatGPT works the page through WebMCP. You sign money. Success is a provider re-read.",
+    "Passenger rights, operated with ChatGPT. Airline inbox, EU261 math, human signature, FlyRight filing, provider verify.",
   metadataBase: new URL("https://aegis-chamber.vercel.app"),
   openGraph: {
-    title: "Aegis OS — you sign, it files, the row must match",
+    title: "Aegis Flight Desk — you sign, it files, the row must match",
     description:
-      "Not a chatbot. A Dispute OS desktop with WebMCP tools, human UAC, and provider verification.",
+      "A product for delayed and cancelled flights. WebMCP tools, deterministic rights, human permission, verified carrier state.",
     url: "https://aegis-chamber.vercel.app",
-    siteName: "Aegis OS",
+    siteName: "Aegis",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Aegis OS — Dispute Runtime",
-    description: "Shared desktop for people and ChatGPT. WebMCP. Human signature. Provider match.",
+    title: "Aegis — Flight Desk",
+    description: "People and ChatGPT share one flight-rights desk. WebMCP. Human signature. Provider match.",
   },
 };
 
